@@ -33,8 +33,10 @@ function buildResponse(command: string) {
   ];
 }
 
-function toUsdcBaseUnits(value: number) {
-  return String(Math.round(value * 1_000_000));
+function toProtocolWei(value: number) {
+  const [whole, fraction = ''] = value.toString().split('.');
+  const paddedFraction = `${fraction}000000000000000000`.slice(0, 18);
+  return `${whole || '0'}${paddedFraction}`.replace(/^0+(?=\d)/, '');
 }
 
 function parseBudget(command: string) {
@@ -66,9 +68,9 @@ function buildJobPayload(command: string, attachments: File[]) {
   return {
     title: firstLine.slice(0, 255),
     description: `${command}${attachmentText}`,
-    max_budget: toUsdcBaseUnits(budget),
+    max_budget: toProtocolWei(budget),
     deadline: Math.floor(Date.now() / 1000) + deadlineSeconds,
-    category: firstLine.toLowerCase().includes('dataset') ? 'data' : 'research',
+    category: firstLine.toLowerCase().includes('dataset') ? 'data-analysis' : 'research',
   };
 }
 
@@ -152,10 +154,10 @@ export function TerminalComposer() {
       const createdJob = await createJob(payload);
 
       pushQueuedLines([
-        'Registering task agent profile with coordination API...',
+        'Registering agent profile via POST /agents...',
         'Job posted successfully.',
         `Created job ${createdJob.id ?? 'pending-id'} in category ${payload.category}.`,
-        'Worker agents can now discover and negotiate against this task.',
+        'Worker agents can now discover the task through GET /jobs and submit proposals.',
       ]);
     } catch {
       pushQueuedLines([
