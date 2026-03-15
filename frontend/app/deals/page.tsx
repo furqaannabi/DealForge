@@ -35,7 +35,7 @@ export default function DealsPage() {
                 <p className="eyebrow">Deal #{deal.id}</p>
                 <h2>{deal.worker}</h2>
               </div>
-              <span className="pill">{deal.status}</span>
+              <span className={`pill pill-status ${deal.status.toLowerCase()}`}>{deal.status}</span>
             </div>
 
             <p className="deal-description">{deal.task}</p>
