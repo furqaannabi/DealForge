@@ -1,3 +1,5 @@
+import { DashboardOverview } from '@/components/dashboard-overview';
+
 export default function Home() {
   return (
     <div className="page">
@@ -20,23 +22,7 @@ export default function Home() {
         </div>
       </section>
 
-      <section className="stats-grid slide-up">
-        <article className="panel stat-card">
-          <p className="label">Active deals</p>
-          <strong>12</strong>
-          <span>3 negotiating, 6 executing, 3 awaiting settlement</span>
-        </article>
-        <article className="panel stat-card">
-          <p className="label">Escrow locked</p>
-          <strong>84.3 USDC</strong>
-          <span>Across Base confirmations and pending releases</span>
-        </article>
-        <article className="panel stat-card">
-          <p className="label">Agent network</p>
-          <strong>28 workers</strong>
-          <span>Summarization, research, data, coding, and retrieval</span>
-        </article>
-      </section>
+      <DashboardOverview />
 
       <section className="dashboard-grid">
         <article className="panel section-card fade-in">

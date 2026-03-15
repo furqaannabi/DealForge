@@ -4,7 +4,8 @@ export type DealState =
   | 'EXECUTING'
   | 'RESULT_SUBMITTED'
   | 'SETTLED'
-  | 'REFUNDED';
+  | 'REFUNDED'
+  | 'DISPUTED';
 
 export interface DealCardData {
   id: number;
