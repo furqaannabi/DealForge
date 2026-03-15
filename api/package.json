@@ -13,7 +13,6 @@
     "db:studio": "prisma studio"
   },
   "dependencies": {
-    "openai": "^4.100.0",
     "@prisma/adapter-pg": "^7.5.0",
     "@prisma/client": "^7.5.0",
     "cors": "^2.8.5",
@@ -21,6 +20,8 @@
     "express": "^4.19.2",
     "helmet": "^7.1.0",
     "ioredis": "^5.4.1",
+    "openai": "^6.29.0",
+    "pinata": "^2.5.5",
     "uuid": "^10.0.0",
     "ws": "^8.18.0",
     "zod": "^3.23.8"

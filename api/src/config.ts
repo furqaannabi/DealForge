@@ -22,9 +22,9 @@ const envSchema = z.object({
   // Auth
   JWT_SECRET: z.string().min(32).default('change-me-in-production-32-chars-min'),
 
-  // IPFS
-  PINATA_API_KEY: z.string().optional(),
-  PINATA_SECRET_KEY: z.string().optional(),
+  // IPFS — Pinata
+  PINATA_JWT: z.string().min(1),
+  PINATA_GATEWAY: z.string().min(1),
 });
 
 function loadConfig() {
