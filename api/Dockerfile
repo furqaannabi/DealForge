@@ -7,12 +7,13 @@ WORKDIR /app
 COPY package*.json ./
 RUN npm install
 
-# Copy source files
+# Copy source files (prisma.config.ts intentionally excluded — generate
+# does not need a DB URL and the config would fail to resolve DATABASE_URL)
 COPY tsconfig.json ./
 COPY prisma ./prisma
 COPY src ./src
 
-# Generate Prisma client (no DB connection needed)
+# Generate Prisma client (schema only, no DB connection needed)
 RUN npx prisma generate
 
 # Compile TypeScript → dist/
@@ -28,6 +29,9 @@ COPY package*.json ./
 
 # Copy node_modules from builder (includes prisma CLI for db push at startup)
 COPY --from=builder /app/node_modules ./node_modules
+
+# Copy Prisma config directly from build context (needed by db push at runtime)
+COPY prisma.config.ts ./
 
 # Copy Prisma schema (required for db push at startup)
 COPY --from=builder /app/prisma ./prisma
