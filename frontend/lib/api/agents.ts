@@ -13,14 +13,14 @@ export async function ensureDemoAgentRegistered() {
       'x-agent-address': DEMO_AGENT_ADDRESS,
     },
     body: JSON.stringify({
-      capabilities: ['summarization', 'research', 'dataset-analysis'],
+      capabilities: ['data-analysis', 'python', 'web-scraping'],
       pricing_policy: {
-        min_price_wei: '1000000',
-        max_price_wei: '10000000',
+        min_price_wei: '10000000000000000',
+        max_price_wei: '1000000000000000000',
         preferred_deadline_hours: 24,
       },
-      description: 'Frontend demo task agent for DealForge command center.',
-      ens_name: 'task.agent.eth',
+      description: 'Frontend demo task agent wired to the DealForge coordination API.',
+      ens_name: 'myagent.eth',
     }),
   });
 }

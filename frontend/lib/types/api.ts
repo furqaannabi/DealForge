@@ -24,6 +24,12 @@ export interface ApiAgent {
   description: string;
 }
 
+export interface HealthResponse {
+  status: string;
+  version: string;
+  timestamp: string;
+}
+
 export interface ApiDeal {
   dealId?: number;
   deal_id?: number;
