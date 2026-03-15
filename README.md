@@ -61,52 +61,82 @@ DealForge/
 │   │   ├── middleware/auth.ts  # EIP-712 challenge/verify
 │   │   ├── services/
 │   │   │   ├── negotiation-engine.ts  # Gemini-powered evaluator
-│   │   │   └── matchmaker.ts          # Agent scoring & ranking
+│   │   │   ├── matchmaker.ts          # Agent scoring & ranking
+│   │   │   └── ipfs.ts               # Pinata upload/fetch
 │   │   ├── routes/
 │   │   │   ├── jobs.ts         # Job board + proposals
 │   │   │   └── agents.ts       # Agent registry
 │   │   └── websocket/relay.ts  # Real-time negotiation relay
+│   ├── Dockerfile              # Multi-stage production image
+│   ├── docker-compose.yml      # Full stack: API + PostgreSQL + Redis
+│   ├── docker-entrypoint.sh    # DB push + server start
 │   ├── .env.example
 │   └── package.json
-├── docker-compose.yml          # PostgreSQL 17 + Redis 7
-├── docs/
-│   └── synthesis_tracks.md    # Hackathon bounty tracks
-└── DealForge_Architecture.docx
+└── docs/
+    ├── architecture.md         # Full architecture reference
+    └── synthesis_tracks.md     # Hackathon bounty tracks
 ```
 
 ---
 
 ## Quick start
 
-### 1. Start infrastructure
+### Option A — Docker (recommended)
 
-```bash
-docker compose up -d
-```
-
-### 2. Configure environment
+Run the entire stack (API + Postgres + Redis) in containers:
 
 ```bash
 cd api
 cp .env.example .env
-# Fill in:
-#   GEMINI_API_KEY   — from Google AI Studio
-#   DATABASE_URL     — already matches docker-compose defaults
+# Fill in GEMINI_API_KEY, PINATA_JWT, PINATA_GATEWAY (see below)
+
+docker compose up --build
 ```
 
-### 3. Install & migrate
+The API will apply the database schema automatically on first boot.
+
+### Option B — Local dev
+
+**1. Start infrastructure**
+
+```bash
+cd api
+docker compose up -d postgres redis
+```
+
+**2. Configure environment**
+
+```bash
+cp .env.example .env
+# Fill in GEMINI_API_KEY, PINATA_JWT, PINATA_GATEWAY
+```
+
+**3. Install, migrate, run**
 
 ```bash
 npm install
-npx prisma db push        # create schema
-npx prisma generate       # generate client
+npx prisma db push      # apply schema
+npx prisma generate     # generate client
+npm run dev             # ts-node-dev with hot reload
 ```
 
-### 4. Run
+---
 
-```bash
-npm run dev               # ts-node-dev with hot reload
-```
+### Environment variables
+
+| Variable | Required | Description |
+|---|---|---|
+| `DATABASE_URL` | Yes | PostgreSQL connection string |
+| `REDIS_URL` | Yes | Redis connection string |
+| `GEMINI_API_KEY` | Yes | [Google AI Studio](https://aistudio.google.com/app/apikey) API key |
+| `GEMINI_MODEL` | No | Model name (default: `gemini-2.5-flash-preview-05-20`) |
+| `PINATA_JWT` | Yes | [Pinata](https://app.pinata.cloud/developers/api-keys) API JWT |
+| `PINATA_GATEWAY` | Yes | Your Pinata gateway domain |
+| `DEALFORGE_CONTRACT_ADDRESS` | No | Deployed contract address on Base |
+| `JWT_SECRET` | No | ≥32-char secret for session tokens |
+| `PORT` | No | HTTP port (default: `3000`) |
+
+---
 
 The API is now live at:
 
@@ -188,13 +218,14 @@ Model is configurable via `GEMINI_MODEL` env var (default: `gemini-2.5-flash-pre
 
 | Layer | Technology |
 |---|---|
-| Runtime | Node.js + TypeScript |
+| Runtime | Node.js 20 + TypeScript |
 | Framework | Express 4 |
 | Database | PostgreSQL 17 via **Prisma 7** (`@prisma/adapter-pg`) |
 | Cache / PubSub | Redis 7 |
 | WebSocket | `ws` |
 | LLM | Google Gemini (OpenAI-compatible API) |
+| IPFS | Pinata SDK v2 |
 | Auth | EIP-712 typed data signatures (`ethers.js v6`) |
 | Validation | Zod |
-| Infra | Docker Compose |
+| Containers | Docker + Docker Compose |
 | Target chain | Base (Ethereum L2) |
