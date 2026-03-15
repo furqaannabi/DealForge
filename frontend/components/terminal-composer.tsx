@@ -1,6 +1,8 @@
 'use client';
 
 import { ChangeEvent, FormEvent, KeyboardEvent, useEffect, useMemo, useRef, useState } from 'react';
+import { ensureDemoAgentRegistered } from '@/lib/api/agents';
+import { createJob } from '@/lib/api/jobs';
 import { commandCatalog, initialTerminalLines, type TerminalLine } from '@/lib/mock-data';
 
 const DEFAULT_COMMAND = 'summarize this research paper\nbudget 3 USDC\ndeadline 20 minutes';
@@ -29,6 +31,47 @@ function buildResponse(command: string) {
     'Agreement reached at 2.5 USDC / 20 minutes.',
     'Escrow ready for creation on Base.',
   ];
+}
+
+function toProtocolWei(value: number) {
+  const [whole, fraction = ''] = value.toString().split('.');
+  const paddedFraction = `${fraction}000000000000000000`.slice(0, 18);
+  return `${whole || '0'}${paddedFraction}`.replace(/^0+(?=\d)/, '');
+}
+
+function parseBudget(command: string) {
+  const match = command.match(/budget\s+(\d+(\.\d+)?)/i);
+  return match ? Number(match[1]) : 3;
+}
+
+function parseDeadline(command: string) {
+  const minuteMatch = command.match(/deadline\s+(\d+)\s*(minute|min)/i);
+  if (minuteMatch) {
+    return Number(minuteMatch[1]) * 60;
+  }
+
+  const hourMatch = command.match(/deadline\s+(\d+)\s*(hour|hr)/i);
+  if (hourMatch) {
+    return Number(hourMatch[1]) * 60 * 60;
+  }
+
+  return 20 * 60;
+}
+
+function buildJobPayload(command: string, attachments: File[]) {
+  const firstLine = command.split('\n')[0]?.trim() || 'New autonomous task';
+  const budget = parseBudget(command);
+  const deadlineSeconds = parseDeadline(command);
+  const attachmentText =
+    attachments.length > 0 ? `\nAttached files: ${attachments.map((file) => file.name).join(', ')}` : '';
+
+  return {
+    title: firstLine.slice(0, 255),
+    description: `${command}${attachmentText}`,
+    max_budget: toProtocolWei(budget),
+    deadline: Math.floor(Date.now() / 1000) + deadlineSeconds,
+    category: firstLine.toLowerCase().includes('dataset') ? 'data-analysis' : 'research',
+  };
 }
 
 function Typewriter({ text }: { text: string }) {
@@ -93,15 +136,35 @@ export function TerminalComposer() {
     return () => window.clearTimeout(timer);
   }, [activeTypingLine, queuedResponse]);
 
-  const runCommand = (raw: string) => {
+  const pushQueuedLines = (response: string[]) => {
+    setQueuedResponse(response);
+  };
+
+  const runCommand = async (raw: string) => {
     const command = raw.trim();
     if (!command) {
       return;
     }
 
-    const response = buildResponse(command);
     setLines((current) => [...current, { id: crypto.randomUUID(), kind: 'command', text: command }]);
-    setQueuedResponse(response);
+
+    try {
+      const payload = buildJobPayload(command, attachments);
+      await ensureDemoAgentRegistered();
+      const createdJob = await createJob(payload);
+
+      pushQueuedLines([
+        'Registering agent profile via POST /agents...',
+        'Job posted successfully.',
+        `Created job ${createdJob.id ?? 'pending-id'} in category ${payload.category}.`,
+        'Worker agents can now discover the task through GET /jobs and submit proposals.',
+      ]);
+    } catch {
+      pushQueuedLines([
+        'API job creation unavailable. Falling back to local terminal simulation.',
+        ...buildResponse(command),
+      ]);
+    }
   };
 
   const onFilesSelected = (event: ChangeEvent<HTMLInputElement>) => {
@@ -111,7 +174,7 @@ export function TerminalComposer() {
 
   const onSubmit = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
-    runCommand(input);
+    void runCommand(input);
   };
 
   const onKeyDown = (event: KeyboardEvent<HTMLTextAreaElement>) => {
@@ -122,7 +185,7 @@ export function TerminalComposer() {
 
     if ((event.metaKey || event.ctrlKey) && event.key === 'Enter') {
       event.preventDefault();
-      runCommand(input);
+      void runCommand(input);
     }
   };
 
