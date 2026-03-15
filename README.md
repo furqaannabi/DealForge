@@ -67,12 +67,15 @@ DealForge/
 │   │   │   ├── jobs.ts         # Job board + proposals
 │   │   │   └── agents.ts       # Agent registry
 │   │   └── websocket/relay.ts  # Real-time negotiation relay
+│   ├── prisma.config.ts        # Prisma 7 config (datasource URL, migrations path)
 │   ├── Dockerfile              # Multi-stage production image
 │   ├── docker-compose.yml      # Full stack: API + PostgreSQL + Redis
+│   ├── docker-compose.dev.yml  # Dev infra only: PostgreSQL + Redis
 │   ├── docker-entrypoint.sh    # DB push + server start
 │   ├── .env.example
 │   └── package.json
 └── docs/
+    ├── DealForge.postman_collection.json
     ├── architecture.md         # Full architecture reference
     └── synthesis_tracks.md     # Hackathon bounty tracks
 ```
@@ -81,43 +84,32 @@ DealForge/
 
 ## Quick start
 
-### Option A — Docker (recommended)
+### Option A — Full Docker stack
 
-Run the entire stack (API + Postgres + Redis) in containers:
+Runs the API + Postgres + Redis in containers. Schema is applied automatically on first boot.
 
 ```bash
 cd api
 cp .env.example .env
-# Fill in GEMINI_API_KEY, PINATA_JWT, PINATA_GATEWAY (see below)
+# Fill in GEMINI_API_KEY, PINATA_JWT, PINATA_GATEWAY
 
 docker compose up --build
 ```
 
-The API will apply the database schema automatically on first boot.
-
-### Option B — Local dev
-
-**1. Start infrastructure**
+### Option B — Local dev (infra in Docker, API on host)
 
 ```bash
 cd api
-docker compose up -d postgres redis
-```
-
-**2. Configure environment**
-
-```bash
 cp .env.example .env
 # Fill in GEMINI_API_KEY, PINATA_JWT, PINATA_GATEWAY
-```
 
-**3. Install, migrate, run**
+# Start Postgres + Redis only
+docker compose -f docker-compose.dev.yml up -d
 
-```bash
+# Install deps, apply schema, start with hot reload
 npm install
-npx prisma db push      # apply schema
-npx prisma generate     # generate client
-npm run dev             # ts-node-dev with hot reload
+npx prisma db push
+npm run dev
 ```
 
 ---
