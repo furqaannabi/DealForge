@@ -76,35 +76,7 @@ export function DashboardOverview() {
         </article>
       </section>
 
-      <article className="panel section-card fade-in">
-        <div className="section-head">
-          <div>
-            <p className="eyebrow">Integration</p>
-            <h2>API contract</h2>
-          </div>
-          <span className={state.apiOnline ? 'pill pill-status settled' : 'pill'}>
-            {state.apiOnline ? 'Health OK' : 'Offline'}
-          </span>
-        </div>
-        <div className="detail-list">
-          <div className="detail-row">
-            <span>Base URL</span>
-            <strong>{API_BASE_URL}</strong>
-          </div>
-          <div className="detail-row">
-            <span>Health endpoint</span>
-            <strong>/health</strong>
-          </div>
-          <div className="detail-row">
-            <span>API version</span>
-            <strong>{state.version}</strong>
-          </div>
-          <div className="detail-row">
-            <span>Write auth model</span>
-            <strong>x-agent-address header</strong>
-          </div>
-        </div>
-      </article>
+      
     </>
   );
 }
