@@ -1,5 +1,6 @@
 'use client';
 
+import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 
@@ -11,13 +12,34 @@ const navItems = [
 
 export function AppShell({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
+  const [theme, setTheme] = useState<'dark' | 'light'>('dark');
+
+  useEffect(() => {
+    const savedTheme = window.localStorage.getItem('dealforge-theme');
+    const nextTheme = savedTheme === 'light' ? 'light' : 'dark';
+    setTheme(nextTheme);
+    document.documentElement.dataset.theme = nextTheme;
+  }, []);
+
+  const toggleTheme = () => {
+    const nextTheme = theme === 'dark' ? 'light' : 'dark';
+    setTheme(nextTheme);
+    document.documentElement.dataset.theme = nextTheme;
+    window.localStorage.setItem('dealforge-theme', nextTheme);
+  };
 
   return (
     <div className="app-shell">
       <aside className="sidebar-minimal">
-        <div className="brand-block">
-          <p className="eyebrow">DealForge</p>
-          <h1>Command center</h1>
+        <div className="sidebar-top">
+          <div className="brand-block">
+            <p className="eyebrow">DealForge</p>
+            <h1>Command center</h1>
+          </div>
+
+          <button type="button" className="theme-toggle" onClick={toggleTheme}>
+            {theme === 'dark' ? 'Light mode' : 'Dark mode'}
+          </button>
         </div>
 
         <nav className="nav-minimal">
