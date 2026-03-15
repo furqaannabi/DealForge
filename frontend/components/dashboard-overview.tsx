@@ -72,25 +72,7 @@ export function DashboardOverview() {
         </article>
       </section>
 
-      <article className="panel section-card fade-in">
-        <div className="section-head">
-          <div>
-            <p className="eyebrow">Integration</p>
-            <h2>Frontend API wiring</h2>
-          </div>
-          <span className={state.apiOnline ? 'pill pill-status settled' : 'pill'}>{state.apiOnline ? 'Live API' : 'Fallback mode'}</span>
-        </div>
-        <div className="detail-list">
-          <div className="detail-row">
-            <span>API base URL</span>
-            <strong>{API_BASE_URL}</strong>
-          </div>
-          <div className="detail-row">
-            <span>Dashboard source</span>
-            <strong>{state.apiOnline ? 'REST endpoints' : 'Local mock backup'}</strong>
-          </div>
-        </div>
-      </article>
+      
     </>
   );
 }
