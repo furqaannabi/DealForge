@@ -1,0 +1,161 @@
+generator client {
+  provider = "prisma-client-js"
+  output   = "../generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+// ─── Agents ───────────────────────────────────────────────────────────────────
+
+model Agent {
+  address         String   @id // Ethereum address (lowercased)
+  capabilities    String[] @default([])
+  pricingPolicy   Json     @default("{}") @map("pricing_policy")
+  reputationScore Float    @default(0) @map("reputation_score")
+  ensName         String?  @map("ens_name")
+  description     String   @default("")
+  lastSeen        DateTime @default(now()) @map("last_seen")
+  createdAt       DateTime @default(now()) @map("created_at")
+
+  // Relations
+  postedJobs       Job[]      @relation("PosterJobs")
+  proposals        Proposal[]
+  sentMessages     Message[]  @relation("SentMessages")
+  receivedMessages Message[]  @relation("ReceivedMessages")
+
+  @@index([reputationScore(sort: Desc)])
+  @@map("agents")
+}
+
+// ─── Jobs ─────────────────────────────────────────────────────────────────────
+
+enum JobStatus {
+  open
+  negotiating
+  locked
+  completed
+  cancelled
+}
+
+model Job {
+  id                 String    @id @default(cuid())
+  posterAddress      String    @map("poster_address")
+  title              String
+  description        String
+  taskDescriptionCid String?   @map("task_description_cid") // IPFS CID
+  maxBudget          String    @map("max_budget") // wei as string
+  deadline           BigInt // unix timestamp
+  category           String    @default("general")
+  status             JobStatus @default(open)
+  createdAt          DateTime  @default(now()) @map("created_at")
+  updatedAt          DateTime  @updatedAt @map("updated_at")
+
+  // Relations
+  poster    Agent      @relation("PosterJobs", fields: [posterAddress], references: [address])
+  proposals Proposal[]
+  messages  Message[]
+  deal      Deal?
+
+  @@index([status])
+  @@index([category])
+  @@index([posterAddress])
+  @@index([deadline])
+  @@map("jobs")
+}
+
+// ─── Proposals ────────────────────────────────────────────────────────────────
+
+enum ProposalStatus {
+  pending
+  accepted
+  rejected
+  countered
+}
+
+model Proposal {
+  id               String         @id @default(cuid())
+  jobId            String         @map("job_id")
+  workerAddress    String         @map("worker_address")
+  proposedPrice    String         @map("proposed_price") // wei
+  proposedDeadline BigInt         @map("proposed_deadline") // unix timestamp
+  message          String         @default("")
+  status           ProposalStatus @default(pending)
+  createdAt        DateTime       @default(now()) @map("created_at")
+  updatedAt        DateTime       @updatedAt @map("updated_at")
+
+  // Relations
+  job    Job   @relation(fields: [jobId], references: [id], onDelete: Cascade)
+  worker Agent @relation(fields: [workerAddress], references: [address])
+
+  @@index([jobId])
+  @@index([workerAddress])
+  @@index([status])
+  @@map("proposals")
+}
+
+// ─── Messages (negotiation log) ───────────────────────────────────────────────
+
+model Message {
+  id        String   @id @default(cuid())
+  jobId     String   @map("job_id")
+  sender    String
+  receiver  String
+  content   String // may be encrypted payload
+  signature String
+  timestamp DateTime @default(now())
+
+  // Relations
+  job           Job   @relation(fields: [jobId], references: [id], onDelete: Cascade)
+  senderAgent   Agent @relation("SentMessages", fields: [sender], references: [address])
+  receiverAgent Agent @relation("ReceivedMessages", fields: [receiver], references: [address])
+
+  @@index([jobId, timestamp])
+  @@map("messages")
+}
+
+// ─── On-chain deal mirror ─────────────────────────────────────────────────────
+
+enum DealStatus {
+  CREATED
+  ACTIVE
+  SUBMITTED
+  SETTLED
+  REFUNDED
+  DISPUTED
+}
+
+model Deal {
+  dealId    BigInt     @id @map("deal_id") // on-chain dealId
+  jobId     String?    @unique @map("job_id")
+  payer     String
+  worker    String
+  amount    String // wei as string
+  status    DealStatus @default(CREATED)
+  txHash    String     @map("tx_hash")
+  settledAt DateTime?  @map("settled_at")
+  createdAt DateTime   @default(now()) @map("created_at")
+  updatedAt DateTime   @updatedAt @map("updated_at")
+
+  // Relations
+  job Job? @relation(fields: [jobId], references: [id])
+
+  @@index([payer])
+  @@index([worker])
+  @@index([status])
+  @@map("deals")
+}
+
+// ─── Auth nonces (replay protection) ─────────────────────────────────────────
+
+model AuthNonce {
+  address  String
+  nonce    String
+  issuedAt DateTime @default(now()) @map("issued_at")
+  used     Boolean  @default(false)
+
+  @@id([address, nonce])
+  @@index([address])
+  @@map("auth_nonces")
+}
