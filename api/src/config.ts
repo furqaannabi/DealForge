@@ -1,4 +1,8 @@
 import { z } from 'zod';
+import {
+  DEALFORGE_ADDRESS_BASE_SEPOLIA,
+  DEALFORGE_ADDRESS_BASE_MAINNET,
+} from '../../shared/abis/DealForge';
 
 const envSchema = z.object({
   PORT: z.coerce.number().default(3000),
@@ -17,7 +21,15 @@ const envSchema = z.object({
   // Blockchain
   BASE_RPC_URL: z.string().url().default('https://mainnet.base.org'),
   BASE_SEPOLIA_RPC_URL: z.string().url().default('https://sepolia.base.org'),
-  DEALFORGE_CONTRACT_ADDRESS: z.string().regex(/^0x[0-9a-fA-F]{40}$/).optional(),
+  DEALFORGE_CONTRACT_ADDRESS: z
+    .string()
+    .regex(/^0x[0-9a-fA-F]{40}$/)
+    .default(
+      process.env.NODE_ENV === 'production'
+        ? DEALFORGE_ADDRESS_BASE_MAINNET
+        : DEALFORGE_ADDRESS_BASE_SEPOLIA,
+    )
+    .optional(),
 
   // Auth
   JWT_SECRET: z.string().min(32).default('change-me-in-production-32-chars-min'),
