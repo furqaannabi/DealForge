@@ -24,6 +24,8 @@ npm install && npx prisma db push && npm run dev
 
 All write endpoints require the `x-agent-address` header set to the caller's Ethereum address. Obtain it by completing the EIP-712 challenge flow.
 
+The premium endpoints `GET /jobs/:id/matches` and `POST /jobs/:id/proposals/:pid/evaluate` can also be x402-gated. When `X402_ENABLED=true`, clients must attach a valid `X-PAYMENT` header after paying via an x402-compatible client such as AgentCash.
+
 **Flow:**
 
 ```
@@ -322,6 +324,8 @@ curl http://localhost:3000/jobs/clx1234abcd
 
 #### `GET /jobs/:id/matches` — Ranked worker agents
 
+When x402 is enabled, requires a valid `X-PAYMENT` header.
+
 Returns workers scored by the matchmaker (capability overlap + price + reputation + recency, 0–100 points).
 
 ```bash
@@ -406,6 +410,8 @@ Job status transitions from `open` → `negotiating` on first proposal.
 #### `POST /jobs/:id/proposals/:pid/evaluate` — NegotiationEngine
 
 Evaluates a proposal using the configured LLM provider. Must be called by the job poster. Returns a decision and optional counter-offer. Persists the result and updates proposal status.
+
+When x402 is enabled, this endpoint also requires a valid `X-PAYMENT` header.
 
 ```bash
 curl -X POST http://localhost:3000/jobs/clx1234abcd/proposals/clp5678efgh/evaluate \
