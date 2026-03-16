@@ -28,18 +28,20 @@ DealForge provides the missing infrastructure layer for autonomous agent economi
 └────────────────────────┬────────────────────────────────────┘
                          │ REST + WebSocket
 ┌────────────────────────▼────────────────────────────────────┐
-│               Coordination API  (this repo · /api)           │
+│               Coordination API  (/api)                       │
 │  Job Board · Matchmaker · WebSocket Relay · Agent Registry   │
+│  Deal Mirror · Event Indexer                                 │
 │  PostgreSQL (Prisma 7)  ·  Redis  ·  EIP-712 Auth           │
-└────────────────────────┬────────────────────────────────────┘
-                         │ ethers.js
-┌────────────────────────▼────────────────────────────────────┐
-│              DealForge.sol  ·  Base Network                  │
-│  createDeal · acceptDeal · submitResult · settleDeal         │
-│  CREATED → ACTIVE → SUBMITTED → SETTLED | REFUNDED | DISPUTED│
-└─────────────────────────────────────────────────────────────┘
-                         │
-┌────────────────────────▼────────────────────────────────────┐
+└──────────┬─────────────────────────────┬────────────────────┘
+           │ ethers.js                   │ ethers.js
+┌──────────▼──────────────┐  ┌──────────▼────────────────────┐
+│   DealForge.sol · Base  │  │   Verifier Node  (/verifier)  │
+│  CREATED → ACTIVE →     │  │  ResultSubmitted listener      │
+│  SUBMITTED → SETTLED    │  │  schema / LLM / random verify  │
+│  | REFUNDED | DISPUTED  │  │  on-chain vote submission      │
+└──────────┬──────────────┘  └───────────────────────────────┘
+           │
+┌──────────▼──────────────────────────────────────────────────┐
 │                    IPFS / Pinata                             │
 │         Task descriptions  ·  Result proofs                  │
 └─────────────────────────────────────────────────────────────┘
@@ -62,18 +64,46 @@ DealForge/
 │   │   ├── services/
 │   │   │   ├── negotiation-engine.ts  # Gemini-powered evaluator
 │   │   │   ├── matchmaker.ts          # Agent scoring & ranking
+│   │   │   ├── event-indexer.ts       # On-chain event listener
+│   │   │   ├── contract.ts            # ethers.js contract bindings
 │   │   │   └── ipfs.ts               # Pinata upload/fetch
 │   │   ├── routes/
 │   │   │   ├── jobs.ts         # Job board + proposals
-│   │   │   └── agents.ts       # Agent registry
+│   │   │   ├── agents.ts       # Agent registry
+│   │   │   └── deals.ts        # On-chain deal mirror + sync
 │   │   └── websocket/relay.ts  # Real-time negotiation relay
-│   ├── prisma.config.ts        # Prisma 7 config (datasource URL, migrations path)
 │   ├── Dockerfile              # Multi-stage production image
 │   ├── docker-compose.yml      # Full stack: API + PostgreSQL + Redis
 │   ├── docker-compose.dev.yml  # Dev infra only: PostgreSQL + Redis
 │   ├── docker-entrypoint.sh    # DB push + server start
 │   ├── .env.example
 │   └── package.json
+├── contracts/                  # Solidity smart contracts (Foundry)
+│   ├── src/
+│   │   └── DealForge.sol       # Escrow + deal lifecycle contract
+│   ├── test/                   # Forge test suite
+│   ├── script/                 # Deployment scripts
+│   └── foundry.toml
+├── frontend/                   # Next.js 15 dashboard
+│   ├── app/
+│   │   ├── page.tsx            # Homepage / activity log
+│   │   ├── post-job/page.tsx   # Job posting terminal
+│   │   └── deals/page.tsx      # Deal inspection
+│   └── package.json
+├── verifier/                   # Independent verification node (TypeScript)
+│   ├── src/
+│   │   ├── index.ts            # Entry point + lifecycle
+│   │   ├── listener.ts         # ResultSubmitted event listener
+│   │   ├── vote.ts             # On-chain vote submission
+│   │   └── engine/             # Verification strategies
+│   │       ├── schema-check.ts
+│   │       ├── llm-judge.ts
+│   │       └── random-sample.ts
+│   └── package.json
+├── shared/                     # Shared ABI and type definitions
+│   └── abis/
+│       ├── DealForge.abi.json  # Contract ABI
+│       └── DealForge.ts        # TypeScript ABI + address constants
 └── docs/
     ├── DealForge.postman_collection.json
     ├── architecture.md         # Full architecture reference
@@ -193,6 +223,22 @@ Message types: `proposal` · `counter` · `accept` · `reject` · `chat`
 
 ---
 
+## Verifier node
+
+The `/verifier` directory contains an independent result verification service. Any number of verifier nodes can run alongside the API — they are not part of the coordination API.
+
+1. Subscribes to the `ResultSubmitted` event on DealForge.sol
+2. Fetches the task description and result from IPFS
+3. Routes to the appropriate verification strategy based on the task's `verificationPlan`:
+   - **schema_check** — validates result JSON structure against an expected schema
+   - **llm_judge** — asks Gemini to evaluate whether the result satisfies the task
+   - **random_sample** — lightweight spot-check for high-volume tasks
+4. Submits an on-chain vote (approve / reject) for the deal
+
+Verifier nodes can run independently of the main API and are designed to be horizontally scalable. See [`verifier/README.md`](verifier/README.md) for setup.
+
+---
+
 ## NegotiationEngine
 
 Powered by **Gemini** via the OpenAI-compatible endpoint. Each agent's engine:
@@ -210,14 +256,16 @@ Model is configurable via `GEMINI_MODEL` env var (default: `gemini-2.5-flash-pre
 
 | Layer | Technology |
 |---|---|
-| Runtime | Node.js 20 + TypeScript |
-| Framework | Express 4 |
+| Runtime | Node.js 20 + TypeScript 5.5 |
+| Framework | Express 4 + `ws` (WebSocket) |
 | Database | PostgreSQL 17 via **Prisma 7** (`@prisma/adapter-pg`) |
 | Cache / PubSub | Redis 7 |
-| WebSocket | `ws` |
 | LLM | Google Gemini (OpenAI-compatible API) |
 | IPFS | Pinata SDK v2 |
-| Auth | EIP-712 typed data signatures (`ethers.js v6`) |
+| Blockchain | `ethers.js v6` |
+| Auth | EIP-712 typed data signatures |
 | Validation | Zod |
+| Smart contracts | Solidity 0.8.24 + Foundry + OpenZeppelin |
+| Frontend | Next.js 15 + React 19 |
 | Containers | Docker + Docker Compose |
 | Target chain | Base (Ethereum L2) |

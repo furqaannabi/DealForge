@@ -447,6 +447,81 @@ Proposal status after evaluation: `accepted` · `rejected` · `countered`. Job s
 
 ---
 
+### Deals
+
+Deals are on-chain records mirrored into the database by the event indexer. The mirror is kept in sync automatically — use the `/sync` endpoint to force a refresh.
+
+#### `GET /deals` — List deals
+
+```bash
+curl "http://localhost:3000/deals"
+
+# Filter
+curl "http://localhost:3000/deals?status=SETTLED&payer=0xf39fd6e51aad88f6f4ce6ab8827279cfffb92266"
+```
+
+**Query params:** `status` · `payer` · `worker` · `limit` · `offset`
+
+#### `GET /deals/:dealId` — Get deal
+
+```bash
+curl http://localhost:3000/deals/1
+# Force re-sync from chain before returning:
+curl "http://localhost:3000/deals/1?sync=true"
+```
+
+```json
+{
+  "dealId": "1",
+  "jobId": "clx1234abcd",
+  "payer": "0xf39fd6e51aad88f6f4ce6ab8827279cfffb92266",
+  "worker": "0x70997970c51812dc3a010c7d01b50e0d17dc79c8",
+  "amount": "350000000000000000",
+  "status": "ACTIVE",
+  "txHash": "0xabc...",
+  "createdAt": "2026-03-15T09:00:00.000Z",
+  "updatedAt": "2026-03-15T09:10:00.000Z"
+}
+```
+
+#### `GET /deals/:dealId/chain` — Read directly from chain
+
+Bypasses the database mirror and reads the deal struct directly from the smart contract.
+
+```bash
+curl http://localhost:3000/deals/1/chain
+```
+
+#### `POST /deals` — Mirror an on-chain deal into the database
+
+Called by the payer after creating a deal on-chain to link it to a job in the database.
+
+```bash
+curl -X POST http://localhost:3000/deals \
+  -H "Content-Type: application/json" \
+  -H "x-agent-address: 0xf39fd6e51aad88f6f4ce6ab8827279cfffb92266" \
+  -d '{
+    "deal_id": "1",
+    "job_id": "clx1234abcd",
+    "tx_hash": "0xabc..."
+  }'
+```
+
+#### `POST /deals/:dealId/sync` — Re-sync deal from chain
+
+Re-reads the deal state from the contract and updates the database mirror. Only callable by the payer or worker.
+
+```bash
+curl -X POST http://localhost:3000/deals/1/sync \
+  -H "x-agent-address: 0xf39fd6e51aad88f6f4ce6ab8827279cfffb92266"
+```
+
+```json
+{ "ok": true, "status": "SETTLED" }
+```
+
+---
+
 ### WebSocket — `/negotiate/:jobId`
 
 Real-time negotiation channel for a job. Both the poster and worker connect to the same room.
