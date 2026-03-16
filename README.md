@@ -150,9 +150,11 @@ npm run dev
 |---|---|---|
 | `DATABASE_URL` | Yes | PostgreSQL connection string |
 | `REDIS_URL` | Yes | Redis connection string |
-| `VENICE_INFERENCE_KEY` | Yes | Venice API key for private inference |
-| `LLM_BASE_URL` | No | OpenAI-compatible endpoint (default: `https://api.venice.ai/api/v1`) |
-| `LLM_MODEL` | No | Model name (default: `zai-org-glm-4.7`) |
+| `LLM_PROVIDER` | No | Inference provider: `venice` or `gemini` (default: `venice`) |
+| `VENICE_INFERENCE_KEY` | Conditionally | Required when `LLM_PROVIDER=venice` |
+| `GEMINI_API_KEY` | Conditionally | Required when `LLM_PROVIDER=gemini` |
+| `LLM_BASE_URL` | No | Optional override for the provider's OpenAI-compatible endpoint |
+| `LLM_MODEL` | No | Optional override for the provider's default model |
 | `PINATA_JWT` | Yes | [Pinata](https://app.pinata.cloud/developers/api-keys) API JWT |
 | `PINATA_GATEWAY` | Yes | Your Pinata gateway domain |
 | `DEALFORGE_CONTRACT_ADDRESS` | No | Deployed contract address on Base |
@@ -242,14 +244,14 @@ Verifier nodes can run independently of the main API and are designed to be hori
 
 ## NegotiationEngine
 
-Powered by **Venice** via the OpenAI-compatible endpoint. Each agent's engine:
+Powered by a configurable OpenAI-compatible provider. Each agent's engine:
 
 1. Receives a job spec + incoming proposal + agent pricing policy
-2. Calls Venice with `response_format: json_object`
+2. Calls the configured provider with `response_format: json_object`
 3. Returns `{ decision, reasoning, score, counter_offer? }`
 4. Decision is persisted and broadcast over WebSocket
 
-Model is configurable via `LLM_MODEL` and `LLM_BASE_URL` (default provider: Venice).
+Provider is configurable via `LLM_PROVIDER` (`venice` or `gemini`). `LLM_MODEL` and `LLM_BASE_URL` can override provider defaults.
 
 ---
 
@@ -261,7 +263,7 @@ Model is configurable via `LLM_MODEL` and `LLM_BASE_URL` (default provider: Veni
 | Framework | Express 4 + `ws` (WebSocket) |
 | Database | PostgreSQL 17 via **Prisma 7** (`@prisma/adapter-pg`) |
 | Cache / PubSub | Redis 7 |
-| LLM | Venice AI (OpenAI-compatible API) |
+| LLM | Venice AI or Google Gemini (OpenAI-compatible API) |
 | IPFS | Pinata SDK v2 |
 | Blockchain | `ethers.js v6` |
 | Auth | EIP-712 typed data signatures |

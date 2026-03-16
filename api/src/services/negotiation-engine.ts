@@ -1,7 +1,7 @@
 /**
- * NegotiationEngine — Venice-powered off-chain proposal evaluator.
+ * NegotiationEngine — provider-backed off-chain proposal evaluator.
  *
- * Uses Venice via the OpenAI-compatible endpoint so we keep
+ * Uses an OpenAI-compatible provider via the standard SDK so we keep
  * the standard openai SDK with zero extra dependencies.
  *
  * Runs fully off-chain; only the final agreed terms are committed
@@ -14,7 +14,7 @@ import { config } from '../config';
 import type { PricingPolicy, NegotiationEvaluation } from '../types';
 
 const client = new OpenAI({
-  apiKey: config.VENICE_INFERENCE_KEY,
+  apiKey: config.LLM_API_KEY,
   baseURL: config.LLM_BASE_URL,
 });
 
