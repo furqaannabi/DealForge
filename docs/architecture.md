@@ -250,7 +250,7 @@ docker run -d \
   -e CONTRACT_ADDRESS=0x... \
   -e PRIVATE_KEY=0x... \
   -e IPFS_GATEWAY=https://gateway.pinata.cloud \
-  -e LLM_API_KEY=... \
+  -e VENICE_INFERENCE_KEY=... \
   -e NODE_ID=verifier-01 \
   dealforge/verifier-node:latest
 ```

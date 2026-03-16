@@ -14,9 +14,10 @@ const envSchema = z.object({
   // Redis
   REDIS_URL: z.string().url().default('redis://localhost:6379'),
 
-  // Gemini (via OpenAI-compatible endpoint)
-  GEMINI_API_KEY: z.string().min(1),
-  GEMINI_MODEL: z.string().default('gemini-2.5-flash-preview-05-20'),
+  // LLM inference (default: Venice OpenAI-compatible endpoint)
+  VENICE_INFERENCE_KEY: z.string().min(1),
+  LLM_BASE_URL: z.string().url().default('https://api.venice.ai/api/v1'),
+  LLM_MODEL: z.string().default('zai-org-glm-4.7'),
 
   // Blockchain
   BASE_RPC_URL: z.string().url().default('https://mainnet.base.org'),
