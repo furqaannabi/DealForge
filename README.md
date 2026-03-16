@@ -121,7 +121,7 @@ Runs the API + Postgres + Redis in containers. Schema is applied automatically o
 ```bash
 cd api
 cp .env.example .env
-# Fill in GEMINI_API_KEY, PINATA_JWT, PINATA_GATEWAY
+# Fill in VENICE_INFERENCE_KEY, PINATA_JWT, PINATA_GATEWAY
 
 docker compose up --build
 ```
@@ -131,7 +131,7 @@ docker compose up --build
 ```bash
 cd api
 cp .env.example .env
-# Fill in GEMINI_API_KEY, PINATA_JWT, PINATA_GATEWAY
+# Fill in VENICE_INFERENCE_KEY, PINATA_JWT, PINATA_GATEWAY
 
 # Start Postgres + Redis only
 docker compose -f docker-compose.dev.yml up -d
@@ -150,8 +150,11 @@ npm run dev
 |---|---|---|
 | `DATABASE_URL` | Yes | PostgreSQL connection string |
 | `REDIS_URL` | Yes | Redis connection string |
-| `GEMINI_API_KEY` | Yes | [Google AI Studio](https://aistudio.google.com/app/apikey) API key |
-| `GEMINI_MODEL` | No | Model name (default: `gemini-2.5-flash-preview-05-20`) |
+| `LLM_PROVIDER` | No | Inference provider: `venice` or `gemini` (default: `venice`) |
+| `VENICE_INFERENCE_KEY` | Conditionally | Required when `LLM_PROVIDER=venice` |
+| `GEMINI_API_KEY` | Conditionally | Required when `LLM_PROVIDER=gemini` |
+| `LLM_BASE_URL` | No | Optional override for the provider's OpenAI-compatible endpoint |
+| `LLM_MODEL` | No | Optional override for the provider's default model |
 | `PINATA_JWT` | Yes | [Pinata](https://app.pinata.cloud/developers/api-keys) API JWT |
 | `PINATA_GATEWAY` | Yes | Your Pinata gateway domain |
 | `DEALFORGE_CONTRACT_ADDRESS` | No | Deployed contract address on Base |
@@ -231,7 +234,7 @@ The `/verifier` directory contains an independent result verification service. A
 2. Fetches the task description and result from IPFS
 3. Routes to the appropriate verification strategy based on the task's `verificationPlan`:
    - **schema_check** — validates result JSON structure against an expected schema
-   - **llm_judge** — asks Gemini to evaluate whether the result satisfies the task
+   - **llm_judge** — asks Venice to evaluate whether the result satisfies the task
    - **random_sample** — lightweight spot-check for high-volume tasks
 4. Submits an on-chain vote (approve / reject) for the deal
 
@@ -241,14 +244,14 @@ Verifier nodes can run independently of the main API and are designed to be hori
 
 ## NegotiationEngine
 
-Powered by **Gemini** via the OpenAI-compatible endpoint. Each agent's engine:
+Powered by a configurable OpenAI-compatible provider. Each agent's engine:
 
 1. Receives a job spec + incoming proposal + agent pricing policy
-2. Calls Gemini with `response_format: json_object`
+2. Calls the configured provider with `response_format: json_object`
 3. Returns `{ decision, reasoning, score, counter_offer? }`
 4. Decision is persisted and broadcast over WebSocket
 
-Model is configurable via `GEMINI_MODEL` env var (default: `gemini-2.5-flash-preview-05-20`).
+Provider is configurable via `LLM_PROVIDER` (`venice` or `gemini`). `LLM_MODEL` and `LLM_BASE_URL` can override provider defaults.
 
 ---
 
@@ -260,7 +263,7 @@ Model is configurable via `GEMINI_MODEL` env var (default: `gemini-2.5-flash-pre
 | Framework | Express 4 + `ws` (WebSocket) |
 | Database | PostgreSQL 17 via **Prisma 7** (`@prisma/adapter-pg`) |
 | Cache / PubSub | Redis 7 |
-| LLM | Google Gemini (OpenAI-compatible API) |
+| LLM | Venice AI or Google Gemini (OpenAI-compatible API) |
 | IPFS | Pinata SDK v2 |
 | Blockchain | `ethers.js v6` |
 | Auth | EIP-712 typed data signatures |
