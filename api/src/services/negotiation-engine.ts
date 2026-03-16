@@ -1,7 +1,7 @@
 /**
- * NegotiationEngine — Gemini-powered off-chain proposal evaluator.
+ * NegotiationEngine — provider-backed off-chain proposal evaluator.
  *
- * Uses Google Gemini via the OpenAI-compatible endpoint so we keep
+ * Uses an OpenAI-compatible provider via the standard SDK so we keep
  * the standard openai SDK with zero extra dependencies.
  *
  * Runs fully off-chain; only the final agreed terms are committed
@@ -14,8 +14,8 @@ import { config } from '../config';
 import type { PricingPolicy, NegotiationEvaluation } from '../types';
 
 const client = new OpenAI({
-  apiKey: config.GEMINI_API_KEY,
-  baseURL: 'https://generativelanguage.googleapis.com/v1beta/openai/',
+  apiKey: config.LLM_API_KEY,
+  baseURL: config.LLM_BASE_URL,
 });
 
 // ─── System prompt ──────────────────────────────────────────────────────────
@@ -58,7 +58,7 @@ export async function evaluateProposal(
   agentPolicy: PricingPolicy,
 ): Promise<NegotiationEvaluation> {
   const response = await client.chat.completions.create({
-    model: config.GEMINI_MODEL,
+    model: config.LLM_MODEL,
     response_format: { type: 'json_object' },
     messages: [
       { role: 'system', content: SYSTEM_PROMPT },
@@ -78,7 +78,7 @@ export async function rankProposals(
   if (proposals.length === 0) return [];
 
   const response = await client.chat.completions.create({
-    model: config.GEMINI_MODEL,
+    model: config.LLM_MODEL,
     response_format: { type: 'json_object' },
     messages: [
       {
