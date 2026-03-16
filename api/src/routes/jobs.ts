@@ -3,6 +3,7 @@ import { z } from 'zod';
 import { JobStatus, ProposalStatus } from '../../generated/prisma/client';
 import { db } from '../db/client';
 import { requireAuth } from '../middleware/auth';
+import { requireEvaluationPayment, requireMatchesPayment } from '../middleware/payment';
 import { evaluateProposal } from '../services/negotiation-engine';
 import { uploadTaskDescription } from '../services/ipfs';
 import { findMatches } from '../services/matchmaker';
@@ -120,7 +121,7 @@ router.post('/', requireAuth, async (req, res) => {
 
 // ─── GET /jobs/:id/matches — Ranked worker agents ───────────────────────────
 
-router.get('/:id/matches', async (req, res) => {
+router.get('/:id/matches', requireMatchesPayment, async (req, res) => {
   const job = await db.job.findUnique({ where: { id: req.params.id } });
   if (!job) { res.status(404).json({ error: 'Job not found' }); return; }
 
@@ -179,7 +180,7 @@ router.post('/:id/proposals', requireAuth, async (req, res) => {
 
 // ─── POST /jobs/:id/proposals/:pid/evaluate — NegotiationEngine ──────────────
 
-router.post('/:id/proposals/:pid/evaluate', requireAuth, async (req, res) => {
+router.post('/:id/proposals/:pid/evaluate', requireAuth, requireEvaluationPayment, async (req, res) => {
   const [job, proposal] = await Promise.all([
     db.job.findUnique({ where: { id: req.params.id } }),
     db.proposal.findUnique({ where: { id: req.params.pid } }),
