@@ -10,7 +10,7 @@ Independent result verification node for the DealForge protocol. Any number of v
 2. Fetches the task description and submitted result from IPFS
 3. Routes to the appropriate verification strategy based on the task's `verificationPlan`:
    - **`schema_check`** — validates the result JSON against an expected schema
-   - **`llm_judge`** — asks Venice to evaluate whether the result satisfies the task spec
+   - **`llm_judge`** — asks the configured LLM provider to evaluate whether the result satisfies the task spec
    - **`random_sample`** — lightweight spot-check; falls back to LLM judge if no plan is specified
 4. Submits an on-chain vote (approve / reject) for the deal via a funded wallet
 
@@ -38,9 +38,11 @@ npm run build && npm start   # production
 | `CONTRACT_ADDRESS` | Yes | Deployed `DealForge.sol` address |
 | `PRIVATE_KEY` | Yes | Funded wallet private key for submitting votes |
 | `IPFS_GATEWAY` | Yes | Pinata (or other) IPFS gateway URL |
-| `VENICE_INFERENCE_KEY` | Yes | Venice API key for private inference |
-| `LLM_BASE_URL` | No | OpenAI-compatible endpoint (default: `https://api.venice.ai/api/v1`) |
-| `LLM_MODEL` | No | Model name (default: `zai-org-glm-4.7`) |
+| `LLM_PROVIDER` | No | Inference provider: `venice` or `gemini` (default: `venice`) |
+| `VENICE_INFERENCE_KEY` | Conditionally | Required when `LLM_PROVIDER=venice` |
+| `GEMINI_API_KEY` | Conditionally | Required when `LLM_PROVIDER=gemini` |
+| `LLM_BASE_URL` | No | Optional override for the provider's OpenAI-compatible endpoint |
+| `LLM_MODEL` | No | Optional override for the provider's default model |
 | `NODE_ID` | No | Unique identifier for this verifier instance |
 | `PORT` | No | Health check HTTP port (default: `3001`) |
 | `MAX_CONCURRENT_JOBS` | No | Max simultaneous verifications (default: `5`) |

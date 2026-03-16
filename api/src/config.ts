@@ -4,6 +4,18 @@ import {
   DEALFORGE_ADDRESS_BASE_MAINNET,
 } from '../../shared/abis/DealForge';
 
+const DEFAULT_LLM_PROVIDER = 'venice' as const;
+const DEFAULT_LLMS = {
+  venice: {
+    baseURL: 'https://api.venice.ai/api/v1',
+    model: 'zai-org-glm-4.7',
+  },
+  gemini: {
+    baseURL: 'https://generativelanguage.googleapis.com/v1beta/openai/',
+    model: 'gemini-2.5-flash-preview-05-20',
+  },
+} as const;
+
 const envSchema = z.object({
   PORT: z.coerce.number().default(3000),
   NODE_ENV: z.enum(['development', 'production', 'test']).default('development'),
@@ -14,10 +26,12 @@ const envSchema = z.object({
   // Redis
   REDIS_URL: z.string().url().default('redis://localhost:6379'),
 
-  // LLM inference (default: Venice OpenAI-compatible endpoint)
-  VENICE_INFERENCE_KEY: z.string().min(1),
-  LLM_BASE_URL: z.string().url().default('https://api.venice.ai/api/v1'),
-  LLM_MODEL: z.string().default('zai-org-glm-4.7'),
+  // LLM inference
+  LLM_PROVIDER: z.enum(['venice', 'gemini']).default(DEFAULT_LLM_PROVIDER),
+  VENICE_INFERENCE_KEY: z.string().min(1).optional(),
+  GEMINI_API_KEY: z.string().min(1).optional(),
+  LLM_BASE_URL: z.string().url().optional(),
+  LLM_MODEL: z.string().min(1).optional(),
 
   // Blockchain
   BASE_RPC_URL: z.string().url().default('https://mainnet.base.org'),
@@ -47,7 +61,22 @@ function loadConfig() {
     console.error(result.error.flatten().fieldErrors);
     process.exit(1);
   }
-  return result.data;
+
+  const env = result.data;
+  const providerDefaults = DEFAULT_LLMS[env.LLM_PROVIDER];
+  const apiKey = env.LLM_PROVIDER === 'venice' ? env.VENICE_INFERENCE_KEY : env.GEMINI_API_KEY;
+
+  if (!apiKey) {
+    console.error(`❌ Missing API key for LLM provider "${env.LLM_PROVIDER}"`);
+    process.exit(1);
+  }
+
+  return {
+    ...env,
+    LLM_API_KEY: apiKey,
+    LLM_BASE_URL: env.LLM_BASE_URL ?? providerDefaults.baseURL,
+    LLM_MODEL: env.LLM_MODEL ?? providerDefaults.model,
+  };
 }
 
 export const config = loadConfig();

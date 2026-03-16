@@ -3,7 +3,7 @@ import { config } from '../config';
 import { LlmJudgePlan, TaskDescription, TaskResult, VerificationResult } from './types';
 
 const client = new OpenAI({
-  apiKey: config.VENICE_INFERENCE_KEY,
+  apiKey: config.LLM_API_KEY,
   baseURL: config.LLM_BASE_URL,
 });
 
