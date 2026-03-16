@@ -10,13 +10,13 @@ const envSchema = z.object({
   // IPFS
   IPFS_GATEWAY: z.string().url().default('https://gateway.pinata.cloud'),
 
-  // LLM (OpenAI-compatible — defaults to Gemini)
-  LLM_API_KEY: z.string().min(1),
+  // LLM (OpenAI-compatible — defaults to Venice)
+  VENICE_INFERENCE_KEY: z.string().min(1),
   LLM_BASE_URL: z
     .string()
     .url()
-    .default('https://generativelanguage.googleapis.com/v1beta/openai'),
-  LLM_MODEL: z.string().default('gemini-2.5-flash-preview-05-20'),
+    .default('https://api.venice.ai/api/v1'),
+  LLM_MODEL: z.string().default('zai-org-glm-4.7'),
 
   // Node identity
   NODE_ID: z.string().default('verifier-01'),

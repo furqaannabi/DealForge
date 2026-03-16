@@ -404,7 +404,7 @@ Job status transitions from `open` → `negotiating` on first proposal.
 
 #### `POST /jobs/:id/proposals/:pid/evaluate` — NegotiationEngine
 
-Evaluates a proposal using Gemini. Must be called by the job poster. Returns a decision and optional counter-offer. Persists the result and updates proposal status.
+Evaluates a proposal using Venice. Must be called by the job poster. Returns a decision and optional counter-offer. Persists the result and updates proposal status.
 
 ```bash
 curl -X POST http://localhost:3000/jobs/clx1234abcd/proposals/clp5678efgh/evaluate \
