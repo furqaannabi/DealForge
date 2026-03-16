@@ -9,6 +9,8 @@ import { extractAgent, issueChallenge, verifySignature } from './middleware/auth
 import { attachWebSocketRelay } from './websocket/relay';
 import jobsRouter from './routes/jobs';
 import agentsRouter from './routes/agents';
+import dealsRouter from './routes/deals';
+import { startEventIndexer, stopEventIndexer } from './services/event-indexer';
 
 // ─── Express app ─────────────────────────────────────────────────────────────
 
@@ -34,6 +36,7 @@ app.post('/auth/verify', verifySignature);
 
 app.use('/jobs', jobsRouter);
 app.use('/agents', agentsRouter);
+app.use('/deals', dealsRouter);
 
 // ─── 404 catch-all ───────────────────────────────────────────────────────────
 
@@ -54,6 +57,8 @@ async function main() {
   await checkDbConnection();
   console.log('✅ Database connected');
 
+  startEventIndexer();
+
   const server = http.createServer(app);
 
   // Attach WebSocket negotiation relay
@@ -69,6 +74,7 @@ async function main() {
   // Graceful shutdown
   const shutdown = async () => {
     console.log('\nShutting down…');
+    stopEventIndexer();
     server.close(() => process.exit(0));
   };
   process.on('SIGTERM', shutdown);
