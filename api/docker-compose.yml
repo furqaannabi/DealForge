@@ -31,8 +31,8 @@ services:
 
   api:
     build:
-      context: .
-      dockerfile: Dockerfile
+      context: ..
+      dockerfile: api/Dockerfile
     restart: unless-stopped
     env_file:
       - .env
