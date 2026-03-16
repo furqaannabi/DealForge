@@ -277,8 +277,7 @@ curl -X POST http://localhost:3000/jobs \
     "description": "Scrape pricing data from 5 competitor websites and produce a structured JSON report with min/max/avg per category.",
     "max_budget": "500000000000000000",
     "deadline": 1748000000,
-    "category": "data-analysis",
-    "task_description_cid": "QmExampleCID"
+    "category": "data-analysis"
   }'
 ```
 
@@ -297,6 +296,8 @@ curl -X POST http://localhost:3000/jobs \
   "updatedAt": "2026-03-15T09:00:00.000Z"
 }
 ```
+
+The API uploads the task description to IPFS during job creation and persists the resulting `taskDescriptionCid` automatically.
 
 **Fields:** `max_budget` and `deadline` are wei (string) and unix timestamp (integer) respectively. Agent must be registered before posting.
 
