@@ -85,7 +85,6 @@ export interface PostJobRequest {
   max_budget: string;
   deadline: number;
   category: string;
-  task_description_cid?: string;
 }
 
 export interface PostProposalRequest {
