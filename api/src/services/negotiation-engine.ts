@@ -1,11 +1,7 @@
 /**
  * NegotiationEngine — provider-backed off-chain proposal evaluator.
- *
- * Uses an OpenAI-compatible provider via the standard SDK so we keep
- * the standard openai SDK with zero extra dependencies.
- *
- * Runs fully off-chain; only the final agreed terms are committed
- * to the DealForge smart contract.
+ * CHANGED: evaluateProposal now returns caveat_params when decision is "accept"
+ * These caveat_params are used to build the ERC-7715 sub-delegation on-chain.
  */
 
 import OpenAI from 'openai';
@@ -19,6 +15,7 @@ const client = new OpenAI({
 });
 
 // ─── System prompt ──────────────────────────────────────────────────────────
+// CHANGED: added caveat_params to the JSON schema the LLM must return
 
 const SYSTEM_PROMPT = `You are the NegotiationEngine for a DealForge autonomous agent.
 DealForge is a trustless on-chain escrow protocol where AI agents hire each other for tasks.
@@ -34,10 +31,18 @@ You MUST respond with valid JSON ONLY — no markdown, no prose, matching this e
     "proposed_price": "<wei as decimal string>",
     "proposed_deadline": <unix timestamp integer>,
     "message": "<counter-offer message>"
+  },
+  "caveat_params": {
+    "max_amount_wei": "<agreed price as wei decimal string>",
+    "expiry": <unix timestamp — use proposed_deadline>,
+    "requires_ipfs_result": true,
+    "requires_verifier_approval": true
   }
 }
 
 Only include counter_offer when decision is "counter".
+Always include caveat_params when decision is "accept" — these become on-chain delegation rules.
+When decision is "reject" or "counter", caveat_params can be null.
 
 Evaluation criteria (weight equally):
 1. PRICE FIT — Is the proposed price within the agent's min/max policy?
@@ -69,7 +74,7 @@ export async function evaluateProposal(
   return parseEvaluation(response.choices[0].message.content ?? '');
 }
 
-// ─── Batch ranking for matchmaking ─────────────────────────────────────────
+// ─── Batch ranking — UNCHANGED ──────────────────────────────────────────────
 
 export async function rankProposals(
   job: Job,
@@ -102,7 +107,7 @@ export async function rankProposals(
     .filter((r) => r.proposal != null);
 }
 
-// ─── Helpers ────────────────────────────────────────────────────────────────
+// ─── Helpers — UNCHANGED except parseEvaluation ─────────────────────────────
 
 function buildEvaluationPrompt(job: Job, proposal: Proposal, policy: PricingPolicy): string {
   return `Evaluate this proposal:
@@ -144,6 +149,7 @@ ${proposals.map((p, i) => `[${i + 1}] ID: ${p.id}
   Message: ${p.message}`).join('\n\n')}`;
 }
 
+// CHANGED: added caveat_params to parsed output
 function parseEvaluation(raw: string): NegotiationEvaluation {
   try {
     const parsed = JSON.parse(raw);
@@ -152,12 +158,15 @@ function parseEvaluation(raw: string): NegotiationEvaluation {
       reasoning:     parsed.reasoning ?? '',
       score:         Number(parsed.score ?? 0),
       counter_offer: parsed.counter_offer,
+      // NEW — only present when decision is "accept"
+      caveat_params: parsed.caveat_params ?? null,
     };
   } catch {
     return {
       decision:  'reject',
       reasoning: 'Could not parse evaluation. Defaulting to reject for safety.',
       score:     0,
+      caveat_params: null,
     };
   }
 }

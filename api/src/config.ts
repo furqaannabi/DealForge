@@ -62,6 +62,16 @@ const envSchema = z.object({
   // IPFS — Pinata
   PINATA_JWT: z.string().min(1),
   PINATA_GATEWAY: z.string().min(1),
+
+  // Agent wallet for signing sub-delegations
+  AGENT_PRIVATE_KEY: z.string().min(1).optional(),
+  VERIFIER_CAVEAT_ADDRESS: z.string().min(1).optional(),
+  IPFS_CAVEAT_ADDRESS: z.string().min(1).optional(),
+
+  // DelegationManager settings for redemption
+  DELEGATION_MANAGER_ADDRESS: z.string().min(1).optional(),
+  WORKER_PRIVATE_KEY: z.string().min(1).optional(),
+  API_BASE_URL: z.string().min(1).optional(),
 });
 
 function loadConfig() {

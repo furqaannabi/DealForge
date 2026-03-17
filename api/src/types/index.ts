@@ -104,16 +104,7 @@ export interface RegisterAgentRequest {
 
 export type NegotiationDecision = 'accept' | 'reject' | 'counter';
 
-export interface NegotiationEvaluation {
-  decision: NegotiationDecision;
-  reasoning: string;
-  score: number;             // 0–100 fit score
-  counter_offer?: {
-    proposed_price: string;
-    proposed_deadline: number;
-    message: string;
-  };
-}
+
 
 export interface MatchScore {
   agent: Agent;
@@ -154,3 +145,24 @@ export interface AuthRequest {
   address: string;
   signature: string; // EIP-712 sig over AuthChallenge
 }
+
+// In your types.ts — add caveat_params to NegotiationEvaluation
+
+export type CaveatParams = {
+  max_amount_wei: string;          // agreed price in wei
+  expiry: number;                  // unix timestamp
+  requires_ipfs_result: boolean;   // always true
+  requires_verifier_approval: boolean; // always true
+};
+
+export type NegotiationEvaluation = {
+  decision: 'accept' | 'reject' | 'counter';
+  reasoning: string;
+  score: number;
+  counter_offer?: {
+    proposed_price: string;
+    proposed_deadline: number;
+    message: string;
+  };
+  caveat_params: CaveatParams | null;  // NEW
+};
