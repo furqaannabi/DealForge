@@ -37,12 +37,20 @@ contract DealForge is ReentrancyGuard, Ownable {
     // ──────────────────── Constants ────────────────────
     uint256 public constant MIN_DEADLINE_BUFFER = 5 minutes;
     uint256 public constant DISPUTE_WINDOW = 48 hours;
+    uint256 public constant MIN_VERIFIER_STAKE = 0.01 ether;
 
     // ──────────────────── State ────────────────────
     uint256 public dealCounter;
+    uint256 public requiredVotes = 3;
     mapping(uint256 => Deal) public deals;
     mapping(address => uint256[]) private _payerDeals;
     mapping(address => uint256[]) private _workerDeals;
+
+    // Verifier state
+    mapping(address => uint256) public verifierStakes;
+    mapping(uint256 => mapping(address => bool)) public hasVoted;
+    mapping(uint256 => uint256) public acceptVotes;
+    mapping(uint256 => uint256) public rejectVotes;
 
     // ──────────────────── Events ────────────────────
     event DealCreated(
@@ -60,6 +68,19 @@ contract DealForge is ReentrancyGuard, Ownable {
     event DealRefunded(uint256 indexed dealId, address recipient, uint256 refundAmount);
     event DisputeRaised(uint256 indexed dealId, address initiator, uint256 raisedAt);
     event DisputeResolved(uint256 indexed dealId, bool paidWorker);
+    event VerifierStaked(address indexed verifier, uint256 amount);
+    event VerifierUnstaked(address indexed verifier, uint256 amount);
+    event VerifierSlashed(address indexed verifier, uint256 amount, string reason);
+    event VoteCast(uint256 indexed dealId, address indexed verifier, bool accept);
+    event ConsensusReached(uint256 indexed dealId, bool settled);
+    event RequiredVotesUpdated(uint256 oldValue, uint256 newValue);
+
+    // ──────────────────── Errors ────────────────────
+    error NotAVerifier();
+    error AlreadyVoted();
+    error InsufficientStake();
+    error DealNotSubmitted();
+    error ConsensusAlreadyMet();
 
     // ──────────────────── Constructor ────────────────────
     constructor(address initialOwner) Ownable(initialOwner) {}
@@ -164,8 +185,10 @@ contract DealForge is ReentrancyGuard, Ownable {
     function settleDeal(uint256 dealId) external nonReentrant {
         Deal storage deal = deals[dealId];
         require(
-            msg.sender == deal.payer || msg.sender == owner(),
-            "Only payer or owner can settle"
+            msg.sender == deal.payer ||
+            msg.sender == owner() ||
+            verifierStakes[msg.sender] >= MIN_VERIFIER_STAKE,
+            "Only payer, owner, or staked verifier can settle"
         );
         require(deal.status == DealStatus.SUBMITTED, "Deal not in SUBMITTED status");
 
@@ -197,7 +220,11 @@ contract DealForge is ReentrancyGuard, Ownable {
 
     function raiseDispute(uint256 dealId) external {
         Deal storage deal = deals[dealId];
-        require(msg.sender == deal.payer, "Only payer can dispute");
+        require(
+            msg.sender == deal.payer ||
+            verifierStakes[msg.sender] >= MIN_VERIFIER_STAKE,
+            "Only payer or staked verifier can dispute"
+        );
         require(deal.status == DealStatus.SUBMITTED, "Deal not in SUBMITTED status");
         require(
             block.timestamp <= deal.submittedAt + DISPUTE_WINDOW,
@@ -224,6 +251,72 @@ contract DealForge is ReentrancyGuard, Ownable {
         emit DisputeResolved(dealId, payWorker);
     }
 
+    // ──────────────────── Verifier Functions ────────────────────
+
+    function stakeVerifier() external payable {
+        if (msg.value < MIN_VERIFIER_STAKE) revert InsufficientStake();
+        verifierStakes[msg.sender] += msg.value;
+        emit VerifierStaked(msg.sender, msg.value);
+    }
+
+    function unstakeVerifier() external nonReentrant {
+        uint256 amount = verifierStakes[msg.sender];
+        if (amount == 0) revert NotAVerifier();
+        verifierStakes[msg.sender] = 0;
+        (bool ok, ) = payable(msg.sender).call{value: amount}("");
+        require(ok, "Transfer failed");
+        emit VerifierUnstaked(msg.sender, amount);
+    }
+
+    function vote(uint256 dealId, bool accept) external nonReentrant {
+        if (verifierStakes[msg.sender] == 0) revert NotAVerifier();
+        if (hasVoted[dealId][msg.sender]) revert AlreadyVoted();
+
+        Deal storage deal = deals[dealId];
+        if (deal.status != DealStatus.SUBMITTED) revert DealNotSubmitted();
+
+        hasVoted[dealId][msg.sender] = true;
+
+        if (accept) {
+            acceptVotes[dealId]++;
+        } else {
+            rejectVotes[dealId]++;
+        }
+
+        emit VoteCast(dealId, msg.sender, accept);
+
+        // Check for consensus
+        if (acceptVotes[dealId] >= requiredVotes) {
+            deal.status = DealStatus.SETTLED;
+            _transferFunds(deal.worker, deal.token, deal.amount);
+            emit DealSettled(dealId, deal.worker, deal.amount);
+            emit ConsensusReached(dealId, true);
+        } else if (rejectVotes[dealId] >= requiredVotes) {
+            deal.status = DealStatus.DISPUTED;
+            emit DisputeRaised(dealId, address(0), block.timestamp);
+            emit ConsensusReached(dealId, false);
+        }
+    }
+
+    function slashVerifier(address verifier, string calldata reason)
+        external
+        onlyOwner
+        nonReentrant
+    {
+        uint256 amount = verifierStakes[verifier];
+        if (amount == 0) revert NotAVerifier();
+        verifierStakes[verifier] = 0;
+        (bool ok, ) = payable(owner()).call{value: amount}("");
+        require(ok, "Transfer failed");
+        emit VerifierSlashed(verifier, amount, reason);
+    }
+
+    function setRequiredVotes(uint256 n) external onlyOwner {
+        require(n >= 1, "Must require at least 1 vote");
+        emit RequiredVotesUpdated(requiredVotes, n);
+        requiredVotes = n;
+    }
+
     // ──────────────────── View Functions ────────────────────
 
     function getDeal(uint256 dealId) external view returns (Deal memory) {
@@ -236,6 +329,14 @@ contract DealForge is ReentrancyGuard, Ownable {
 
     function getDealsForWorker(address worker) external view returns (uint256[] memory) {
         return _workerDeals[worker];
+    }
+
+    function isVerifier(address addr) external view returns (bool) {
+        return verifierStakes[addr] >= MIN_VERIFIER_STAKE;
+    }
+
+    function getVotes(uint256 dealId) external view returns (uint256 accept, uint256 reject) {
+        return (acceptVotes[dealId], rejectVotes[dealId]);
     }
 
     // ──────────────────── Internal Helpers ────────────────────
