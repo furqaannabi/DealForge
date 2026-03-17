@@ -3,7 +3,9 @@ import { z } from 'zod';
 import { JobStatus, ProposalStatus } from '../../generated/prisma/client';
 import { db } from '../db/client';
 import { requireAuth } from '../middleware/auth';
+import { requireEvaluationPayment, requireMatchesPayment } from '../middleware/payment';
 import { evaluateProposal } from '../services/negotiation-engine';
+import { uploadTaskDescription } from '../services/ipfs';
 import { findMatches } from '../services/matchmaker';
 
 const router = Router();
@@ -16,7 +18,6 @@ const postJobSchema = z.object({
   max_budget: z.string().regex(/^\d+$/, 'must be wei as decimal string'),
   deadline: z.number().int().positive(),
   category: z.string().min(1).max(64),
-  task_description_cid: z.string().optional(),
 });
 
 const proposalSchema = z.object({
@@ -81,7 +82,7 @@ router.post('/', requireAuth, async (req, res) => {
     return;
   }
 
-  const { title, description, max_budget, deadline, category, task_description_cid } = parsed.data;
+  const { title, description, max_budget, deadline, category } = parsed.data;
 
   const job = await db.job.create({
     data: {
@@ -91,16 +92,36 @@ router.post('/', requireAuth, async (req, res) => {
       maxBudget: max_budget,
       deadline: BigInt(deadline),
       category,
-      taskDescriptionCid: task_description_cid ?? null,
     },
   });
 
-  res.status(201).json(job);
+  try {
+    const taskUpload = await uploadTaskDescription(job.id, {
+      task: description,
+      format: 'text/plain',
+      constraints: [],
+      metadata: {
+        title,
+        category,
+        poster_address: req.agentAddress!,
+      },
+    });
+
+    const updatedJob = await db.job.update({
+      where: { id: job.id },
+      data: { taskDescriptionCid: taskUpload.cid },
+    });
+
+    res.status(201).json(updatedJob);
+  } catch (err) {
+    await db.job.delete({ where: { id: job.id } }).catch(() => undefined);
+    res.status(502).json({ error: 'Failed to upload task description to IPFS', detail: String(err) });
+  }
 });
 
 // ─── GET /jobs/:id/matches — Ranked worker agents ───────────────────────────
 
-router.get('/:id/matches', async (req, res) => {
+router.get('/:id/matches', requireMatchesPayment, async (req, res) => {
   const job = await db.job.findUnique({ where: { id: req.params.id } });
   if (!job) { res.status(404).json({ error: 'Job not found' }); return; }
 
@@ -159,7 +180,7 @@ router.post('/:id/proposals', requireAuth, async (req, res) => {
 
 // ─── POST /jobs/:id/proposals/:pid/evaluate — NegotiationEngine ──────────────
 
-router.post('/:id/proposals/:pid/evaluate', requireAuth, async (req, res) => {
+router.post('/:id/proposals/:pid/evaluate', requireAuth, requireEvaluationPayment, async (req, res) => {
   const [job, proposal] = await Promise.all([
     db.job.findUnique({ where: { id: req.params.id } }),
     db.proposal.findUnique({ where: { id: req.params.pid } }),
