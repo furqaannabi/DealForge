@@ -16,6 +16,8 @@ contract MockERC20 is ERC20 {
 }
 
 contract DealForgeTest is Test {
+    receive() external payable {}
+
     DealForge public dealForge;
     MockERC20 public token;
 
@@ -23,6 +25,9 @@ contract DealForgeTest is Test {
     address public payer = address(0x1);
     address public worker = address(0x2);
     address public unauthorized = address(0x3);
+    address public verifier1 = address(0x4);
+    address public verifier2 = address(0x5);
+    address public verifier3 = address(0x6);
 
     bytes32 public taskHash = keccak256("ipfs://QmTaskCID");
     bytes32 public resultHash = keccak256("ipfs://QmResultCID");
@@ -35,6 +40,9 @@ contract DealForgeTest is Test {
         deadline = block.timestamp + 1 days;
 
         vm.deal(payer, 100 ether);
+        vm.deal(verifier1, 10 ether);
+        vm.deal(verifier2, 10 ether);
+        vm.deal(verifier3, 10 ether);
         token.mint(payer, 1_000_000 ether);
 
         vm.prank(payer);
@@ -247,7 +255,7 @@ contract DealForgeTest is Test {
         uint256 dealId = _createAcceptSubmitDeal();
 
         vm.prank(unauthorized);
-        vm.expectRevert("Only payer or owner can settle");
+        vm.expectRevert("Only payer, owner, or staked verifier can settle");
         dealForge.settleDeal(dealId);
     }
 
@@ -321,7 +329,7 @@ contract DealForgeTest is Test {
         uint256 dealId = _createAcceptSubmitDeal();
 
         vm.prank(unauthorized);
-        vm.expectRevert("Only payer can dispute");
+        vm.expectRevert("Only payer or staked verifier can dispute");
         dealForge.raiseDispute(dealId);
     }
 
@@ -468,6 +476,250 @@ contract DealForgeTest is Test {
 
         assertEq(address(dealForge).balance, 0);
     }
+
+    // ═══════════════════ stakeVerifier ═══════════════════
+
+    function test_stakeVerifier_success() public {
+        vm.prank(verifier1);
+        dealForge.stakeVerifier{value: 0.01 ether}();
+
+        assertTrue(dealForge.isVerifier(verifier1));
+        assertEq(dealForge.verifierStakes(verifier1), 0.01 ether);
+    }
+
+    function test_stakeVerifier_additionalStake() public {
+        vm.prank(verifier1);
+        dealForge.stakeVerifier{value: 0.01 ether}();
+
+        vm.prank(verifier1);
+        dealForge.stakeVerifier{value: 0.05 ether}();
+
+        assertEq(dealForge.verifierStakes(verifier1), 0.06 ether);
+    }
+
+    function test_stakeVerifier_revertsIfInsufficientStake() public {
+        vm.prank(verifier1);
+        vm.expectRevert(DealForge.InsufficientStake.selector);
+        dealForge.stakeVerifier{value: 0.001 ether}();
+    }
+
+    // ═══════════════════ unstakeVerifier ═══════════════════
+
+    function test_unstakeVerifier_success() public {
+        vm.prank(verifier1);
+        dealForge.stakeVerifier{value: 0.1 ether}();
+
+        uint256 balBefore = verifier1.balance;
+        vm.prank(verifier1);
+        dealForge.unstakeVerifier();
+
+        assertEq(verifier1.balance, balBefore + 0.1 ether);
+        assertFalse(dealForge.isVerifier(verifier1));
+    }
+
+    function test_unstakeVerifier_revertsIfNotVerifier() public {
+        vm.prank(verifier1);
+        vm.expectRevert(DealForge.NotAVerifier.selector);
+        dealForge.unstakeVerifier();
+    }
+
+    // ═══════════════════ vote ═══════════════════
+
+    function _stakeVerifiers() internal {
+        vm.prank(verifier1);
+        dealForge.stakeVerifier{value: 0.1 ether}();
+        vm.prank(verifier2);
+        dealForge.stakeVerifier{value: 0.1 ether}();
+        vm.prank(verifier3);
+        dealForge.stakeVerifier{value: 0.1 ether}();
+    }
+
+    function test_vote_accept_consensus_settles() public {
+        uint256 dealId = _createAcceptSubmitDeal();
+        _stakeVerifiers();
+
+        uint256 workerBalBefore = worker.balance;
+
+        vm.prank(verifier1);
+        dealForge.vote(dealId, true);
+        vm.prank(verifier2);
+        dealForge.vote(dealId, true);
+        vm.prank(verifier3);
+        dealForge.vote(dealId, true);
+
+        DealForge.Deal memory deal = dealForge.getDeal(dealId);
+        assertEq(uint256(deal.status), uint256(DealForge.DealStatus.SETTLED));
+        assertEq(worker.balance, workerBalBefore + dealAmount);
+
+        (uint256 acceptCount, uint256 rejectCount) = dealForge.getVotes(dealId);
+        assertEq(acceptCount, 3);
+        assertEq(rejectCount, 0);
+    }
+
+    function test_vote_reject_consensus_disputes() public {
+        uint256 dealId = _createAcceptSubmitDeal();
+        _stakeVerifiers();
+
+        vm.prank(verifier1);
+        dealForge.vote(dealId, false);
+        vm.prank(verifier2);
+        dealForge.vote(dealId, false);
+        vm.prank(verifier3);
+        dealForge.vote(dealId, false);
+
+        DealForge.Deal memory deal = dealForge.getDeal(dealId);
+        assertEq(uint256(deal.status), uint256(DealForge.DealStatus.DISPUTED));
+
+        (uint256 acceptCount, uint256 rejectCount) = dealForge.getVotes(dealId);
+        assertEq(acceptCount, 0);
+        assertEq(rejectCount, 3);
+    }
+
+    function test_vote_revertsIfNotVerifier() public {
+        uint256 dealId = _createAcceptSubmitDeal();
+
+        vm.prank(unauthorized);
+        vm.expectRevert(DealForge.NotAVerifier.selector);
+        dealForge.vote(dealId, true);
+    }
+
+    function test_vote_revertsIfAlreadyVoted() public {
+        uint256 dealId = _createAcceptSubmitDeal();
+        _stakeVerifiers();
+
+        vm.prank(verifier1);
+        dealForge.vote(dealId, true);
+
+        vm.prank(verifier1);
+        vm.expectRevert(DealForge.AlreadyVoted.selector);
+        dealForge.vote(dealId, true);
+    }
+
+    function test_vote_revertsIfDealNotSubmitted() public {
+        uint256 dealId = _createAndAcceptDeal();
+        _stakeVerifiers();
+
+        vm.prank(verifier1);
+        vm.expectRevert(DealForge.DealNotSubmitted.selector);
+        dealForge.vote(dealId, true);
+    }
+
+    // ═══════════════════ slashVerifier ═══════════════════
+
+    function test_slashVerifier_success() public {
+        vm.prank(verifier1);
+        dealForge.stakeVerifier{value: 0.1 ether}();
+
+        uint256 ownerBalBefore = owner.balance;
+        vm.prank(owner);
+        dealForge.slashVerifier(verifier1, "dishonest vote");
+
+        assertEq(dealForge.verifierStakes(verifier1), 0);
+        assertEq(owner.balance, ownerBalBefore + 0.1 ether);
+    }
+
+    function test_slashVerifier_revertsIfNotOwner() public {
+        vm.prank(verifier1);
+        dealForge.stakeVerifier{value: 0.1 ether}();
+
+        vm.prank(unauthorized);
+        vm.expectRevert();
+        dealForge.slashVerifier(verifier1, "reason");
+    }
+
+    function test_slashVerifier_revertsIfNotVerifier() public {
+        vm.prank(owner);
+        vm.expectRevert(DealForge.NotAVerifier.selector);
+        dealForge.slashVerifier(unauthorized, "reason");
+    }
+
+    // ═══════════════════ setRequiredVotes ═══════════════════
+
+    function test_setRequiredVotes_success() public {
+        vm.prank(owner);
+        dealForge.setRequiredVotes(5);
+
+        assertEq(dealForge.requiredVotes(), 5);
+    }
+
+    function test_setRequiredVotes_revertsIfZero() public {
+        vm.prank(owner);
+        vm.expectRevert("Must require at least 1 vote");
+        dealForge.setRequiredVotes(0);
+    }
+
+    function test_setRequiredVotes_revertsIfNotOwner() public {
+        vm.prank(unauthorized);
+        vm.expectRevert();
+        dealForge.setRequiredVotes(5);
+    }
+
+    // ═══════════════════ settleDeal by verifier ═══════════════════
+
+    function test_settleDeal_success_byVerifier() public {
+        uint256 dealId = _createAcceptSubmitDeal();
+        uint256 workerBalBefore = worker.balance;
+
+        vm.prank(verifier1);
+        dealForge.stakeVerifier{value: 0.1 ether}();
+
+        vm.prank(verifier1);
+        dealForge.settleDeal(dealId);
+
+        DealForge.Deal memory deal = dealForge.getDeal(dealId);
+        assertEq(uint256(deal.status), uint256(DealForge.DealStatus.SETTLED));
+        assertEq(worker.balance, workerBalBefore + dealAmount);
+    }
+
+    // ═══════════════════ raiseDispute by verifier ═══════════════════
+
+    function test_raiseDispute_success_byVerifier() public {
+        uint256 dealId = _createAcceptSubmitDeal();
+
+        vm.prank(verifier1);
+        dealForge.stakeVerifier{value: 0.1 ether}();
+
+        vm.prank(verifier1);
+        dealForge.raiseDispute(dealId);
+
+        DealForge.Deal memory deal = dealForge.getDeal(dealId);
+        assertEq(uint256(deal.status), uint256(DealForge.DealStatus.DISPUTED));
+    }
+
+    // ═══════════════════ View: isVerifier / getVotes ═══════════════════
+
+    function test_isVerifier_returnsFalseForNonVerifier() public view {
+        assertFalse(dealForge.isVerifier(unauthorized));
+    }
+
+    function test_getVotes_returnsZeroForNewDeal() public {
+        uint256 dealId = _createDeal();
+        (uint256 acceptCount, uint256 rejectCount) = dealForge.getVotes(dealId);
+        assertEq(acceptCount, 0);
+        assertEq(rejectCount, 0);
+    }
+
+    // ═══════════════════ Consensus with custom threshold ═══════════════════
+
+    function test_vote_consensus_withCustomThreshold() public {
+        vm.prank(owner);
+        dealForge.setRequiredVotes(1);
+
+        uint256 dealId = _createAcceptSubmitDeal();
+
+        vm.prank(verifier1);
+        dealForge.stakeVerifier{value: 0.1 ether}();
+
+        uint256 workerBalBefore = worker.balance;
+        vm.prank(verifier1);
+        dealForge.vote(dealId, true);
+
+        DealForge.Deal memory deal = dealForge.getDeal(dealId);
+        assertEq(uint256(deal.status), uint256(DealForge.DealStatus.SETTLED));
+        assertEq(worker.balance, workerBalBefore + dealAmount);
+    }
+
+    // ═══════════════════ Existing Invariant Tests ═══════════════════
 
     function test_invariant_statusOnlyMovesForward() public {
         uint256 dealId = _createDeal();
