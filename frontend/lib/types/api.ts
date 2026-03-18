@@ -49,14 +49,26 @@ export interface AuthVerifyResponse {
 }
 
 export interface ApiDeal {
-  dealId?: number;
-  deal_id?: number;
+  dealId?: number | string;
+  deal_id?: number | string;
+  jobId?: string | null;
+  job_id?: string | null;
   payer: string;
   worker: string;
   amount: string;
   status: ApiDealStatus;
   txHash?: string;
   tx_hash?: string;
+  settledAt?: string | null;
+  settled_at?: string | null;
+  createdAt?: string;
+  created_at?: string;
+  updatedAt?: string;
+  updated_at?: string;
+  job?: {
+    title?: string;
+    category?: string;
+  } | null;
 }
 
 export interface JobsListResponse {
@@ -74,6 +86,13 @@ export interface AgentDealsResponse {
   disputed_count: number;
   deals_as_payer: ApiDeal[];
   deals_as_worker: ApiDeal[];
+}
+
+export interface DealsListResponse {
+  deals: ApiDeal[];
+  total: number;
+  limit: number;
+  offset: number;
 }
 
 export interface CreateJobRequest {
