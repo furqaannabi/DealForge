@@ -7,11 +7,11 @@ export async function listJobs(status?: string) {
   return apiRequest<JobsListResponse>(`/jobs${query}`);
 }
 
-export async function createJob(payload: CreateJobRequest) {
+export async function createJob(payload: CreateJobRequest, agentAddress = DEMO_AGENT_ADDRESS) {
   return apiRequest<ApiJob>('/jobs', {
     method: 'POST',
     headers: {
-      'x-agent-address': DEMO_AGENT_ADDRESS,
+      'x-agent-address': agentAddress,
     },
     body: JSON.stringify(payload),
   });

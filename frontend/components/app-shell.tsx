@@ -1,8 +1,10 @@
 'use client';
 
 import { useEffect, useState } from 'react';
+import { ConnectKitButton } from 'connectkit';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
+import { useAccount } from 'wagmi';
 
 const navItems = [
   { href: '/', label: 'Dashboard' },
@@ -13,6 +15,7 @@ const navItems = [
 export function AppShell({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
   const [theme, setTheme] = useState<'dark' | 'light'>('dark');
+  const { address, isConnected } = useAccount();
 
   useEffect(() => {
     const savedTheme = window.localStorage.getItem('dealforge-theme');
@@ -41,6 +44,14 @@ export function AppShell({ children }: { children: React.ReactNode }) {
           <button type="button" className="theme-toggle" onClick={toggleTheme}>
             {theme === 'dark' ? 'Light mode' : 'Dark mode'}
           </button>
+
+          <ConnectKitButton.Custom>
+            {({ show, isConnected: walletConnected, truncatedAddress }) => (
+              <button type="button" className="theme-toggle wallet-toggle" onClick={show}>
+                {walletConnected ? truncatedAddress : 'Connect wallet'}
+              </button>
+            )}
+          </ConnectKitButton.Custom>
         </div>
 
         <nav className="nav-minimal">
@@ -53,8 +64,8 @@ export function AppShell({ children }: { children: React.ReactNode }) {
 
         <div className="sidebar-note">
           <p className="eyebrow">Your Agent</p>
-          <strong>task.agent.eth</strong>
-          <span>Connected and ready</span>
+          <strong>{isConnected && address ? `${address.slice(0, 6)}...${address.slice(-4)}` : 'Wallet needed'}</strong>
+          <span>{isConnected ? 'Connected and ready' : 'Connect to post jobs'}</span>
         </div>
       </aside>
 
