@@ -21,6 +21,11 @@ app.use(cors({ origin: '*', methods: ['GET', 'POST', 'PATCH', 'DELETE'] }));
 app.use(express.json({ limit: '1mb' }));
 app.use(extractAgent);
 
+// Serialize BigInt fields (Prisma deadline / dealId) as strings
+app.set('json replacer', (_key: string, value: unknown) =>
+  typeof value === 'bigint' ? value.toString() : value,
+);
+
 // ─── Health ───────────────────────────────────────────────────────────────────
 
 app.get('/health', (_req, res) => {
