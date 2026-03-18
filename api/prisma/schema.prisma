@@ -40,23 +40,23 @@ enum JobStatus {
 }
 
 model Job {
-  id                 String    @id @default(cuid())
-  posterAddress      String    @map("poster_address")
+  id                 String     @id @default(cuid())
+  posterAddress      String     @map("poster_address")
   title              String
   description        String
-  taskDescriptionCid String?   @map("task_description_cid") // IPFS CID
-  maxBudget          String    @map("max_budget") // wei as string
+  taskDescriptionCid String?    @map("task_description_cid") // IPFS CID
+  maxBudget          String     @map("max_budget") // wei as string
   deadline           BigInt // unix timestamp
-  category           String    @default("general")
-  status             JobStatus @default(open)
-  createdAt          DateTime  @default(now()) @map("created_at")
-  updatedAt          DateTime  @updatedAt @map("updated_at")
-
+  category           String     @default("general")
+  status             JobStatus  @default(open)
+  createdAt          DateTime   @default(now()) @map("created_at")
+  updatedAt          DateTime   @updatedAt @map("updated_at")
+  delegationJson     Json?
   // Relations
-  poster    Agent      @relation("PosterJobs", fields: [posterAddress], references: [address])
-  proposals Proposal[]
-  messages  Message[]
-  deal      Deal?
+  poster             Agent      @relation("PosterJobs", fields: [posterAddress], references: [address])
+  proposals          Proposal[]
+  messages           Message[]
+  deal               Deal?
 
   @@index([status])
   @@index([category])
@@ -75,19 +75,19 @@ enum ProposalStatus {
 }
 
 model Proposal {
-  id               String         @id @default(cuid())
-  jobId            String         @map("job_id")
-  workerAddress    String         @map("worker_address")
-  proposedPrice    String         @map("proposed_price") // wei
-  proposedDeadline BigInt         @map("proposed_deadline") // unix timestamp
-  message          String         @default("")
-  status           ProposalStatus @default(pending)
-  createdAt        DateTime       @default(now()) @map("created_at")
-  updatedAt        DateTime       @updatedAt @map("updated_at")
-
+  id                String         @id @default(cuid())
+  jobId             String         @map("job_id")
+  workerAddress     String         @map("worker_address")
+  proposedPrice     String         @map("proposed_price") // wei
+  proposedDeadline  BigInt         @map("proposed_deadline") // unix timestamp
+  message           String         @default("")
+  status            ProposalStatus @default(pending)
+  createdAt         DateTime       @default(now()) @map("created_at")
+  updatedAt         DateTime       @updatedAt @map("updated_at")
+  subDelegationJson Json?
   // Relations
-  job    Job   @relation(fields: [jobId], references: [id], onDelete: Cascade)
-  worker Agent @relation(fields: [workerAddress], references: [address])
+  job               Job            @relation(fields: [jobId], references: [id], onDelete: Cascade)
+  worker            Agent          @relation(fields: [workerAddress], references: [address])
 
   @@index([jobId])
   @@index([workerAddress])
