@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { getSmartAccountsEnvironment } from '@metamask/smart-accounts-kit';
 import {
   DEALFORGE_ADDRESS_BASE_SEPOLIA,
   DEALFORGE_ADDRESS_BASE_MAINNET,
@@ -62,6 +63,14 @@ const envSchema = z.object({
   // IPFS — Pinata
   PINATA_JWT: z.string().min(1),
   PINATA_GATEWAY: z.string().min(1),
+
+  // Agent wallet for signing sub-delegations
+  AGENT_PRIVATE_KEY: z.string().min(1).optional(),
+  VERIFIER_CAVEAT_ADDRESS: z.string().min(1).optional(),
+  IPFS_CAVEAT_ADDRESS: z.string().min(1).optional(),
+
+  WORKER_PRIVATE_KEY: z.string().min(1).optional(),
+  API_BASE_URL: z.string().min(1).optional(),
 });
 
 function loadConfig() {
@@ -75,6 +84,8 @@ function loadConfig() {
   const env = result.data;
   const providerDefaults = DEFAULT_LLMS[env.LLM_PROVIDER];
   const apiKey = env.LLM_PROVIDER === 'venice' ? env.VENICE_INFERENCE_KEY : env.GEMINI_API_KEY;
+  const smartAccountChainId = env.NODE_ENV === 'production' ? 8453 : 84532;
+  const smartAccountsEnvironment = getSmartAccountsEnvironment(smartAccountChainId);
 
   if (env.X402_ENABLED) {
     if (!env.X402_PAY_TO_ADDRESS) {
@@ -94,6 +105,7 @@ function loadConfig() {
 
   return {
     ...env,
+    DELEGATION_MANAGER_ADDRESS: smartAccountsEnvironment.DelegationManager,
     LLM_API_KEY: apiKey,
     LLM_BASE_URL: env.LLM_BASE_URL ?? providerDefaults.baseURL,
     LLM_MODEL: env.LLM_MODEL ?? providerDefaults.model,

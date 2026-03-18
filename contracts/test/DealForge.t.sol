@@ -255,7 +255,7 @@ contract DealForgeTest is Test {
         uint256 dealId = _createAcceptSubmitDeal();
 
         vm.prank(unauthorized);
-        vm.expectRevert("Only payer, owner, or staked verifier can settle");
+        vm.expectRevert("Only payer, owner, delegationManager, or staked verifier can settle");
         dealForge.settleDeal(dealId);
     }
 
