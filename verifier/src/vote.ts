@@ -1,8 +1,9 @@
 /**
- * VoteClient — submits the verifier's decision on-chain via the Phase 5
- * vote(dealId, accept) function. Requires the verifier wallet to be staked
- * (stakeVerifier() called once at setup). Consensus auto-settles or
- * auto-disputes once requiredVotes threshold is met.
+ * VoteClient — submits the verifier's decision on-chain.
+ *
+ * Updated for MetaMask Delegation integration:
+ *   ACCEPT → recordVerifierApproval(dealId)  ← marks approval, delegation handles settlement
+ *   REJECT → raiseDispute(dealId)            ← unchanged
  */
 
 import { ethers } from 'ethers';
@@ -10,8 +11,8 @@ import { config } from './config';
 import { VoteDecision } from './engine/types';
 
 const ABI = [
-  'function vote(uint256 dealId, bool accept) nonpayable',
-  'function isVerifier(address addr) view returns (bool)',
+  'function vote(uint256 dealId, bool accept) nonpayable',  // NEW
+  'function raiseDispute(uint256 dealId) nonpayable',
 ];
 
 function getWalletAndContract(): { wallet: ethers.Wallet; contract: ethers.Contract } {
@@ -23,12 +24,29 @@ function getWalletAndContract(): { wallet: ethers.Wallet; contract: ethers.Contr
 
 export async function submitVote(dealId: bigint, decision: VoteDecision): Promise<string> {
   const { wallet, contract } = getWalletAndContract();
-  const accept = decision === 'ACCEPT';
 
   console.log(`[vote] deal #${dealId} → ${decision} (wallet: ${wallet.address})`);
 
-  const tx: ethers.ContractTransactionResponse = await contract.vote(dealId, accept);
-  const receipt = await tx.wait();
-  console.log(`[vote] vote(${accept}) tx: ${receipt?.hash}`);
-  return receipt?.hash ?? tx.hash;
+  if (decision === 'ACCEPT') {
+    // Previously called settleDeal() directly.
+    // Now we just record approval — the worker's delegation redemption
+    // triggers settlement automatically via DelegationManager.
+    const tx: ethers.ContractTransactionResponse = await contract.vote(dealId, decision === 'ACCEPT');
+    const receipt = await tx.wait();
+    console.log(`[vote] recordVerifierApproval tx: ${receipt?.hash}`);
+    return receipt?.hash ?? tx.hash;
+  }
+
+  // REJECT — unchanged
+  try {
+    const tx: ethers.ContractTransactionResponse = await contract.raiseDispute(dealId);
+    const receipt = await tx.wait();
+    console.log(`[vote] raiseDispute tx: ${receipt?.hash}`);
+    return receipt?.hash ?? tx.hash;
+  } catch (err) {
+    console.error(
+      `[vote] REJECT for deal #${dealId} could not be submitted on-chain: ${String(err)}`,
+    );
+    throw err;
+  }
 }
