@@ -73,10 +73,6 @@ export async function redeemDelegation(
   if (!config.WORKER_PRIVATE_KEY) {
     throw new Error('WORKER_PRIVATE_KEY not set');
   }
-  if (!config.DELEGATION_MANAGER_ADDRESS) {
-    throw new Error('DELEGATION_MANAGER_ADDRESS not set');
-  }
-
   // ── Step 1: Fetch delegations from API ──────────────────────────────────
   // Parent delegation — signed by user when they posted the job
   const parentRes = await fetch(
