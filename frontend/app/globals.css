@@ -11,6 +11,15 @@
   --success-soft: rgba(255, 255, 255, 0.08);
   --success-line: rgba(255, 255, 255, 0.18);
   --shadow: 0 24px 60px rgba(0, 0, 0, 0.34);
+  --metal-sheen: linear-gradient(
+    90deg,
+    rgba(255, 255, 255, 0.16) 0%,
+    rgba(255, 255, 255, 0.05) 18%,
+    rgba(255, 255, 255, 0.11) 40%,
+    rgba(255, 255, 255, 0.03) 68%,
+    rgba(255, 255, 255, 0.12) 100%
+  );
+  --metal-glow: linear-gradient(180deg, rgba(255, 255, 255, 0.08), transparent 75%);
   --font-mono: "JetBrains Mono", "Fira Code", "IBM Plex Mono", monospace;
 }
 
@@ -27,6 +36,15 @@
   --success-soft: rgba(0, 0, 0, 0.06);
   --success-line: rgba(0, 0, 0, 0.14);
   --shadow: 0 16px 34px rgba(0, 0, 0, 0.08);
+  --metal-sheen: linear-gradient(
+    90deg,
+    rgba(255, 255, 255, 0.85) 0%,
+    rgba(255, 255, 255, 0.25) 18%,
+    rgba(255, 255, 255, 0.58) 40%,
+    rgba(255, 255, 255, 0.14) 68%,
+    rgba(255, 255, 255, 0.72) 100%
+  );
+  --metal-glow: linear-gradient(180deg, rgba(255, 255, 255, 0.5), transparent 75%);
 }
 
 * {
@@ -90,6 +108,31 @@ textarea {
   overflow: hidden;
   backdrop-filter: blur(18px);
   transition: background 180ms ease, border-color 180ms ease, box-shadow 180ms ease;
+}
+
+.hero::before,
+.page-head::before,
+.metrics-band::before,
+.split-board::before,
+.deal-card-minimal::before {
+  content: "";
+  position: absolute;
+  inset: 0 0 auto;
+  height: 74px;
+  pointer-events: none;
+  background:
+    var(--metal-sheen),
+    var(--metal-glow);
+  opacity: 0.28;
+  mask-image: linear-gradient(180deg, #000 0%, rgba(0, 0, 0, 0.82) 48%, transparent 100%);
+}
+
+:root[data-theme='light'] .hero::before,
+:root[data-theme='light'] .page-head::before,
+:root[data-theme='light'] .metrics-band::before,
+:root[data-theme='light'] .split-board::before,
+:root[data-theme='light'] .deal-card-minimal::before {
+  opacity: 0.5;
 }
 
 .eyebrow {
@@ -228,8 +271,8 @@ textarea {
 }
 
 .hero-copy h1 {
-  max-width: 10ch;
-  font-size: clamp(2.6rem, 6vw, 4.9rem);
+  max-width: 12ch;
+  font-size: clamp(2.2rem, 5vw, 4.1rem);
   line-height: 0.96;
   letter-spacing: -0.05em;
 }

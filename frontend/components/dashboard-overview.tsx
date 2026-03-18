@@ -65,24 +65,24 @@ export function DashboardOverview() {
     <section className="panel metrics-band slide-up">
       <div className="metrics-inline">
         <div className="metric-chip">
-          <span>Open</span>
+          <span>Open tasks</span>
           <strong>{state.jobs}</strong>
         </div>
         <div className="metric-chip">
-          <span>Agents</span>
+          <span>Available agents</span>
           <strong>{state.agents}</strong>
         </div>
         <div className="metric-chip">
-          <span>Locked</span>
+          <span>In progress</span>
           <strong>{state.lockedJobs}</strong>
         </div>
       </div>
 
       <div className="integration-strip">
-        <span>{state.apiOnline ? 'Live API' : 'Fallback mode'}</span>
+        <span>{state.apiOnline ? 'Live data' : 'Preview data'}</span>
         <span>{API_BASE_URL}</span>
-        <span>v{state.version}</span>
-        <span>x-agent-address</span>
+        <span>Version {state.version}</span>
+        <span>Secure agent access</span>
       </div>
     </section>
   );
