@@ -90,12 +90,18 @@ DealForge/
 ├── verifier/                   # Independent verification node (TypeScript)
 │   ├── src/
 │   │   ├── index.ts            # Entry point + lifecycle
-│   │   ├── listener.ts         # ResultSubmitted event listener
-│   │   ├── vote.ts             # On-chain vote submission
+│   │   ├── config.ts           # Zod env config
+│   │   ├── listener.ts         # ResultSubmitted event listener + concurrency cap
+│   │   ├── vote.ts             # On-chain vote submission (approve / raiseDispute)
+│   │   ├── ipfs.ts             # bytes32 → CIDv0 + IPFS gateway fetch
+│   │   ├── health.ts           # Express health endpoint + runtime stats
 │   │   └── engine/             # Verification strategies
+│   │       ├── types.ts        # TaskDescription, TaskResult, VerificationResult types
+│   │       ├── index.ts        # Strategy dispatcher
 │   │       ├── schema-check.ts
 │   │       ├── llm-judge.ts
 │   │       └── random-sample.ts
+│   ├── Dockerfile
 │   └── package.json
 ├── shared/                     # Shared ABI and type definitions
 │   └── abis/
@@ -141,6 +147,8 @@ npm run dev
 | `PINATA_JWT` | Yes | [Pinata](https://app.pinata.cloud/developers/api-keys) API JWT |
 | `PINATA_GATEWAY` | Yes | Your Pinata gateway domain |
 | `DEALFORGE_CONTRACT_ADDRESS` | No | Deployed contract address on Base |
+| `BASE_WS_URL` | No | Alchemy WebSocket URL for Base mainnet event indexing |
+| `BASE_SEPOLIA_WS_URL` | No | Alchemy WebSocket URL for Base Sepolia event indexing |
 | `JWT_SECRET` | No | ≥32-char secret for session tokens |
 | `PORT` | No | HTTP port (default: `3000`) |
 
@@ -213,15 +221,18 @@ Message types: `proposal` · `counter` · `accept` · `reject` · `chat`
 
 The `/verifier` directory contains an independent result verification service. Any number of verifier nodes can run alongside the API — they are not part of the coordination API.
 
-1. Subscribes to the `ResultSubmitted` event on DealForge.sol
-2. Fetches the task description and result from IPFS
+1. Subscribes to the `ResultSubmitted` event on `DealForge.sol`
+2. Fetches the task description and result from IPFS (converts on-chain `bytes32` hash → CIDv0)
 3. Routes to the appropriate verification strategy based on the task's `verificationPlan`:
-   - **schema_check** — validates result JSON structure against an expected schema
-   - **llm_judge** — asks Venice to evaluate whether the result satisfies the task
-   - **random_sample** — lightweight spot-check for high-volume tasks
-4. Submits an on-chain vote (approve / reject) for the deal
+   - **`schema_check`** — validates required fields and minimum record count; optionally spot-checks a random row sample
+   - **`llm_judge`** — scores the result 0–100 against evaluation criteria; ACCEPT if score ≥ threshold
+   - **`random_sample`** — samples N rows and checks that specified fields are non-empty
+   - _(no plan)_ — falls back to a generic `llm_judge`
+4. Submits an on-chain vote via a funded wallet:
+   - **ACCEPT** → `vote(dealId, true)` records verifier approval; worker's delegation redemption triggers settlement automatically via `DelegationManager`
+   - **REJECT** → `raiseDispute(dealId)` places the deal in a `DISPUTED` state immediately
 
-Verifier nodes can run independently of the main API and are designed to be horizontally scalable. See [`verifier/README.md`](verifier/README.md) for setup.
+Verifier nodes are stateless and horizontally scalable — each submits its own vote independently. See [`verifier/README.md`](verifier/README.md) for setup.
 
 ---
 
