@@ -21,7 +21,7 @@ import { db } from '../db/client';
 const DOMAIN = {
   name: 'DealForge',
   version: '1',
-  chainId: 8453, // Base mainnet; swap to 84532 for Sepolia
+  chainId: 84532, // Base Sepolia
 } as const;
 
 const CHALLENGE_TYPE = {
