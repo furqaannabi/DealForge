@@ -30,6 +30,24 @@ export interface HealthResponse {
   timestamp: string;
 }
 
+export interface AuthChallengeResponse {
+  address: string;
+  nonce: string;
+  issued_at: string;
+}
+
+export interface AuthVerifyRequest {
+  address: string;
+  nonce: string;
+  issued_at: string;
+  signature: string;
+}
+
+export interface AuthVerifyResponse {
+  verified: boolean;
+  address: string;
+}
+
 export interface ApiDeal {
   dealId?: number;
   deal_id?: number;
@@ -64,4 +82,15 @@ export interface CreateJobRequest {
   max_budget: string;
   deadline: number;
   category: string;
+}
+
+export interface AgentRegistrationRequest {
+  capabilities: string[];
+  pricing_policy: {
+    min_price_wei: string;
+    max_price_wei: string;
+    preferred_deadline_hours: number;
+  };
+  description: string;
+  ens_name: string;
 }
