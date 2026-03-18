@@ -628,6 +628,19 @@
     "anonymous": false
   },
   {
+    "type": "event",
+    "name": "VerifierApprovalRecorded",
+    "inputs": [
+      {
+        "name": "dealId",
+        "type": "uint256",
+        "indexed": true,
+        "internalType": "uint256"
+      }
+    ],
+    "anonymous": false
+  },
+  {
     "type": "error",
     "name": "OwnableInvalidOwner",
     "inputs": [
