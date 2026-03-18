@@ -36,6 +36,7 @@ const delegationSchema = z.object({
   caveats: z.array(z.object({
     enforcer: z.string(),
     terms: z.string(),
+    args: z.string().optional(),
   })),
   salt: z.string(),
   signature: z.string(),

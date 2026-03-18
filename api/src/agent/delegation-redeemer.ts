@@ -33,7 +33,7 @@ function getRpcUrl(): string {
 function encodeDelegation(delegation: Delegation): string {
   return ethers.AbiCoder.defaultAbiCoder().encode(
     [
-      'tuple(address delegate, address delegator, bytes32 authority, tuple(address enforcer, bytes terms)[] caveats, bytes32 salt, bytes signature)',
+      'tuple(address delegate, address delegator, bytes32 authority, tuple(address enforcer, bytes terms, bytes args)[] caveats, bytes32 salt, bytes signature)',
     ],
     [
       {
@@ -43,6 +43,7 @@ function encodeDelegation(delegation: Delegation): string {
         caveats:   delegation.caveats.map(c => ({
           enforcer: c.enforcer,
           terms:    c.terms,
+          args: c.args ?? '0x',
         })),
         salt:      delegation.salt,
         signature: delegation.signature,
