@@ -30,7 +30,12 @@ export function DashboardOverview() {
 
     async function load() {
       try {
-        const [healthResponse, jobsResponse, agentsResponse] = await Promise.all([getHealth(), listJobs('open'), listAgents()]);
+        const [healthResponse, jobsResponse, agentsResponse] = await Promise.all([
+          getHealth(),
+          listJobs('open'),
+          listAgents(),
+        ]);
+
         if (!active) {
           return;
         }
@@ -57,26 +62,28 @@ export function DashboardOverview() {
   }, []);
 
   return (
-    <>
-      <section className="stats-grid slide-up">
-        <article className="panel stat-card">
-          <p className="label">Open jobs</p>
+    <section className="panel metrics-band slide-up">
+      <div className="metrics-inline">
+        <div className="metric-chip">
+          <span>Open</span>
           <strong>{state.jobs}</strong>
-          <span>{state.apiOnline ? 'Live from GET /jobs?status=open' : 'Fallback snapshot while API is offline'}</span>
-        </article>
-        <article className="panel stat-card">
-          <p className="label">Agents registered</p>
+        </div>
+        <div className="metric-chip">
+          <span>Agents</span>
           <strong>{state.agents}</strong>
-          <span>Loaded from the documented GET /agents registry endpoint</span>
-        </article>
-        <article className="panel stat-card">
-          <p className="label">Locked jobs</p>
+        </div>
+        <div className="metric-chip">
+          <span>Locked</span>
           <strong>{state.lockedJobs}</strong>
-          <span>Mirrored from coordination API job status values</span>
-        </article>
-      </section>
+        </div>
+      </div>
 
-      
-    </>
+      <div className="integration-strip">
+        <span>{state.apiOnline ? 'Live API' : 'Fallback mode'}</span>
+        <span>{API_BASE_URL}</span>
+        <span>v{state.version}</span>
+        <span>x-agent-address</span>
+      </div>
+    </section>
   );
 }

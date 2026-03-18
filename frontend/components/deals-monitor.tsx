@@ -81,28 +81,17 @@ export function DealsMonitor() {
 
   return (
     <>
-      <section className="deal-summary slide-up">
-        <article className="panel summary-tile">
-          <span>Live</span>
-          <strong>{liveCount}</strong>
-          <p>{source === 'api' ? 'Loaded from agent deal history' : 'Fallback deal snapshot'}</p>
-        </article>
-        <article className="panel summary-tile">
-          <span>Escrow visible</span>
-          <strong>{escrowTotal} USDC</strong>
-          <p>Across the deals currently displayed</p>
-        </article>
-        <article className="panel summary-tile">
-          <span>Finalized</span>
-          <strong>{finalizedCount}</strong>
-          <p>{source === 'api' ? 'Mirrored from on-chain status' : 'Static demo completion state'}</p>
-        </article>
+      <section className="panel deal-summary-bar slide-up">
+        <span>Live {liveCount}</span>
+        <span>Escrow {escrowTotal} USDC</span>
+        <span>Finalized {finalizedCount}</span>
+        <span>{source === 'api' ? 'API mirror' : 'Fallback snapshot'}</span>
       </section>
 
-      <section className="deal-grid slide-up">
+      <section className="deal-card-grid slide-up">
         {items.map((deal) => (
           <article key={deal.id} className="panel deal-card-minimal">
-            <div className="section-head">
+            <div className="deal-row-top">
               <div>
                 <p className="eyebrow">Deal #{deal.id}</p>
                 <h2>{deal.worker}</h2>
@@ -110,45 +99,47 @@ export function DealsMonitor() {
               <span className={`pill pill-status ${deal.status.toLowerCase()}`}>{deal.status}</span>
             </div>
 
-            <p className="deal-description">{deal.task}</p>
+            <div className="deal-row-body">
+              <p className="deal-description">{deal.task}</p>
 
-            <div className="meta-grid">
-              <div className="meta-item">
-                <span>Escrow</span>
-                <strong>{deal.escrow}</strong>
-              </div>
-              <div className="meta-item">
-                <span>Deadline</span>
-                <strong>{deal.deadline}</strong>
-              </div>
-              <div className="meta-item">
-                <span>Confirmation</span>
-                <strong>{deal.confirmation}</strong>
-              </div>
-              <div className="meta-item">
-                <span>Transaction</span>
-                <a href={`https://basescan.org/tx/${deal.txHash}`} target="_blank" rel="noreferrer">
-                  {formatTxHash(deal.txHash)}
-                </a>
-              </div>
-            </div>
-
-            <div className="progress-head">
-              <span>Lifecycle progress</span>
-              <strong>{deal.progress}%</strong>
-            </div>
-
-            <div className="progress-track compact">
-              <div className="progress-fill" style={{ width: `${deal.progress}%` }} />
-            </div>
-
-            <div className="timeline-minimal">
-              {deal.timeline.map((step) => (
-                <div key={`${deal.id}-${step.label}`} className={step.complete ? 'timeline-item complete' : 'timeline-item'}>
-                  <span className="timeline-bullet" />
-                  <span>{step.label}</span>
+              <div className="meta-grid">
+                <div className="meta-item">
+                  <span>Escrow</span>
+                  <strong>{deal.escrow}</strong>
                 </div>
-              ))}
+                <div className="meta-item">
+                  <span>Deadline</span>
+                  <strong>{deal.deadline}</strong>
+                </div>
+                <div className="meta-item">
+                  <span>Confirmation</span>
+                  <strong>{deal.confirmation}</strong>
+                </div>
+                <div className="meta-item">
+                  <span>Transaction</span>
+                  <a href={`https://basescan.org/tx/${deal.txHash}`} target="_blank" rel="noreferrer">
+                    {formatTxHash(deal.txHash)}
+                  </a>
+                </div>
+              </div>
+
+              <div className="progress-head">
+                <span>Progress</span>
+                <strong>{deal.progress}%</strong>
+              </div>
+
+              <div className="progress-track compact">
+                <div className="progress-fill" style={{ width: `${deal.progress}%` }} />
+              </div>
+
+              <div className="timeline-minimal">
+                {deal.timeline.map((step) => (
+                  <div key={`${deal.id}-${step.label}`} className={step.complete ? 'timeline-item complete' : 'timeline-item'}>
+                    <span className="timeline-bullet" />
+                    <span>{step.label}</span>
+                  </div>
+                ))}
+              </div>
             </div>
           </article>
         ))}
