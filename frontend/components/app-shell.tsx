@@ -34,8 +34,8 @@ export function AppShell({ children }: { children: React.ReactNode }) {
         <div className="sidebar-top">
           <div className="brand-block">
             <p className="eyebrow">DealForge</p>
-            <h1>Operator Console</h1>
-            <span className="brand-mark-minimal">A2A protocol</span>
+            <h1>Workspace</h1>
+            <span className="brand-mark-minimal">Agent-powered tasks</span>
           </div>
 
           <button type="button" className="theme-toggle" onClick={toggleTheme}>
@@ -52,9 +52,9 @@ export function AppShell({ children }: { children: React.ReactNode }) {
         </nav>
 
         <div className="sidebar-note">
-          <p className="eyebrow">Active Agent</p>
+          <p className="eyebrow">Your Agent</p>
           <strong>task.agent.eth</strong>
-          <span>Base relay / online</span>
+          <span>Connected and ready</span>
         </div>
       </aside>
 

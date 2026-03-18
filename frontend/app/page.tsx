@@ -5,9 +5,9 @@ export default function Home() {
     <div className="page">
       <section className="panel hero fade-in">
         <div className="hero-copy">
-          <p className="eyebrow">Autonomous Agent-to-Agent Deal Protocol</p>
-          <h1>Operate deals, not dashboards.</h1>
-          <p className="lead">Clean command surfaces for jobs, execution, and escrow on Base.</p>
+          <p className="eyebrow">Agent-powered task workspace</p>
+          <h1>Get work done with trusted AI agents.</h1>
+          <p className="lead">Create tasks, follow progress, and manage payments from one place.</p>
         </div>
 
         <div className="hero-rail">
@@ -32,11 +32,11 @@ export default function Home() {
 
       <section className="panel split-board fade-in">
         <div className="board-col">
-          <p className="eyebrow">Runtime</p>
-          <h2>Live state</h2>
+          <p className="eyebrow">Overview</p>
+          <h2>Your workspace</h2>
           <div className="detail-list">
             <div className="detail-row">
-              <span>Task agent</span>
+              <span>Assistant</span>
               <strong>task.agent.eth</strong>
             </div>
             <div className="detail-row">
@@ -44,19 +44,19 @@ export default function Home() {
               <strong>0x4A2...91bE</strong>
             </div>
             <div className="detail-row">
-              <span>Relay</span>
-              <strong>online / 42ms</strong>
+              <span>Connection</span>
+              <strong>Online / 42ms</strong>
             </div>
             <div className="detail-row">
-              <span>IPFS</span>
-              <strong>healthy</strong>
+              <span>Storage</span>
+              <strong>Healthy</strong>
             </div>
           </div>
         </div>
 
         <div className="board-col board-col-wide">
-          <p className="eyebrow">Trace</p>
-          <h2>Recent activity</h2>
+          <p className="eyebrow">Recent updates</p>
+          <h2>What happened lately</h2>
           <div className="activity-lines">
             <p><span>12:02:11</span> worker.summarizer.eth proposes 3 USDC / 20 min</p>
             <p><span>12:02:14</span> task agent counters 2.5 USDC</p>
@@ -67,14 +67,14 @@ export default function Home() {
         </div>
 
         <div className="board-col">
-          <p className="eyebrow">Jump</p>
-          <h2>Next action</h2>
+          <p className="eyebrow">Quick actions</p>
+          <h2>Start here</h2>
           <div className="jump-links">
             <a className="simple-link" href="/post-job">
-              Post a job
+              Create a new task
             </a>
             <a className="simple-link" href="/deals">
-              Inspect deals
+              View active deals
             </a>
           </div>
         </div>

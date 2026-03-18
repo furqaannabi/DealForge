@@ -25,7 +25,7 @@ function mapApiDeal(deal: ApiDeal): DealCardData {
   return {
     id,
     worker: deal.worker,
-    task: 'Live on-chain deal mirrored from the coordination API.',
+    task: 'Task details synced from your live deal activity.',
     escrow: formatAmount(deal.amount),
     status,
     deadline: 'Tracked on-chain',
@@ -82,10 +82,10 @@ export function DealsMonitor() {
   return (
     <>
       <section className="panel deal-summary-bar slide-up">
-        <span>Live {liveCount}</span>
-        <span>Escrow {escrowTotal} USDC</span>
-        <span>Finalized {finalizedCount}</span>
-        <span>{source === 'api' ? 'API mirror' : 'Fallback snapshot'}</span>
+        <span>Active {liveCount}</span>
+        <span>Funded {escrowTotal} USDC</span>
+        <span>Completed {finalizedCount}</span>
+        <span>{source === 'api' ? 'Live updates' : 'Preview data'}</span>
       </section>
 
       <section className="deal-card-grid slide-up">
