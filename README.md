@@ -72,10 +72,7 @@ DealForge/
 │   │   │   ├── agents.ts       # Agent registry
 │   │   │   └── deals.ts        # On-chain deal mirror + sync
 │   │   └── websocket/relay.ts  # Real-time negotiation relay
-│   ├── Dockerfile              # Multi-stage production image
-│   ├── docker-compose.yml      # Full stack: API + PostgreSQL + Redis
-│   ├── docker-compose.dev.yml  # Dev infra only: PostgreSQL + Redis
-│   ├── docker-entrypoint.sh    # DB push + server start
+│   ├── docker-compose.yml      # PostgreSQL + Redis infrastructure
 │   ├── .env.example
 │   └── package.json
 ├── contracts/                  # Solidity smart contracts (Foundry)
@@ -114,27 +111,13 @@ DealForge/
 
 ## Quick start
 
-### Option A — Full Docker stack
-
-Runs the API + Postgres + Redis in containers. Schema is applied automatically on first boot.
-
 ```bash
 cd api
 cp .env.example .env
-# Fill in VENICE_INFERENCE_KEY, PINATA_JWT, PINATA_GATEWAY
+# Fill in VENICE_INFERENCE_KEY (or GEMINI_API_KEY), PINATA_JWT, PINATA_GATEWAY
 
-docker compose up --build
-```
-
-### Option B — Local dev (infra in Docker, API on host)
-
-```bash
-cd api
-cp .env.example .env
-# Fill in VENICE_INFERENCE_KEY, PINATA_JWT, PINATA_GATEWAY
-
-# Start Postgres + Redis only
-docker compose -f docker-compose.dev.yml up -d
+# Start Postgres + Redis
+docker compose up -d
 
 # Install deps, apply schema, start with hot reload
 npm install
@@ -270,5 +253,5 @@ Provider is configurable via `LLM_PROVIDER` (`venice` or `gemini`). `LLM_MODEL` 
 | Validation | Zod |
 | Smart contracts | Solidity 0.8.24 + Foundry + OpenZeppelin |
 | Frontend | Next.js 15 + React 19 |
-| Containers | Docker + Docker Compose |
+| Infra | Docker (Postgres + Redis) |
 | Target chain | Base (Ethereum L2) |

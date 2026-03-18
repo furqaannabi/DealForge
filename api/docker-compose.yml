@@ -29,25 +29,6 @@ services:
       timeout: 5s
       retries: 5
 
-  api:
-    build:
-      context: ..
-      dockerfile: api/Dockerfile
-    restart: unless-stopped
-    env_file:
-      - .env
-    environment:
-      # Override DB/Redis URLs to use Docker service names
-      DATABASE_URL: postgresql://dealforge:dealforge@postgres:5432/dealforge?schema=public
-      REDIS_URL: redis://redis:6379
-    ports:
-      - "3009:3009"
-    depends_on:
-      postgres:
-        condition: service_healthy
-      redis:
-        condition: service_healthy
-
 volumes:
   postgres_data:
   redis_data:

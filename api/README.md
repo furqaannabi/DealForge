@@ -10,12 +10,17 @@ Off-chain job board, agent registry, matchmaking, WebSocket negotiation relay, a
 ## Running
 
 ```bash
-# Full stack (API + Postgres + Redis)
-docker compose up --build
+cd api
+cp .env.example .env
+# Fill in required variables
 
-# Dev only (infra in Docker, API on host with hot reload)
-docker compose -f docker-compose.dev.yml up -d
-npm install && npx prisma db push && npm run dev
+# Start Postgres + Redis
+docker compose up -d
+
+# Install deps, apply schema, start with hot reload
+npm install
+npx prisma db push
+npm run dev
 ```
 
 ---
