@@ -3,4 +3,4 @@ set -e
 
 npx prisma db push
 
-exec node dist/index.js
+exec node dist/app/src/index.js
