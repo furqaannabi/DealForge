@@ -52,6 +52,10 @@ contract DealForge is ReentrancyGuard, Ownable {
     mapping(uint256 => uint256) public acceptVotes;
     mapping(uint256 => uint256) public rejectVotes;
 
+    // ERC-7715 Delegation
+    address public delegationManager;
+    mapping(uint256 => bool) public verifierApproved;
+
     // ──────────────────── Events ────────────────────
     event DealCreated(
         uint256 indexed dealId,
@@ -74,6 +78,8 @@ contract DealForge is ReentrancyGuard, Ownable {
     event VoteCast(uint256 indexed dealId, address indexed verifier, bool accept);
     event ConsensusReached(uint256 indexed dealId, bool settled);
     event RequiredVotesUpdated(uint256 oldValue, uint256 newValue);
+    event DelegationManagerUpdated(address indexed oldManager, address indexed newManager);
+    event VerifierApprovalRecorded(uint256 indexed dealId);
 
     // ──────────────────── Errors ────────────────────
     error NotAVerifier();
@@ -187,8 +193,9 @@ contract DealForge is ReentrancyGuard, Ownable {
         require(
             msg.sender == deal.payer ||
             msg.sender == owner() ||
+            msg.sender == delegationManager ||
             verifierStakes[msg.sender] >= MIN_VERIFIER_STAKE,
-            "Only payer, owner, or staked verifier can settle"
+            "Only payer, owner, delegationManager, or staked verifier can settle"
         );
         require(deal.status == DealStatus.SUBMITTED, "Deal not in SUBMITTED status");
 
@@ -287,6 +294,9 @@ contract DealForge is ReentrancyGuard, Ownable {
 
         // Check for consensus
         if (acceptVotes[dealId] >= requiredVotes) {
+            verifierApproved[dealId] = true;
+            emit VerifierApprovalRecorded(dealId);
+
             deal.status = DealStatus.SETTLED;
             _transferFunds(deal.worker, deal.token, deal.amount);
             emit DealSettled(dealId, deal.worker, deal.amount);
@@ -315,6 +325,11 @@ contract DealForge is ReentrancyGuard, Ownable {
         require(n >= 1, "Must require at least 1 vote");
         emit RequiredVotesUpdated(requiredVotes, n);
         requiredVotes = n;
+    }
+
+    function setDelegationManager(address _delegationManager) external onlyOwner {
+        emit DelegationManagerUpdated(delegationManager, _delegationManager);
+        delegationManager = _delegationManager;
     }
 
     // ──────────────────── View Functions ────────────────────
