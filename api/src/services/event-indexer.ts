@@ -10,7 +10,7 @@ import { config } from '../config';
 import { db } from '../db/client';
 import { DealStatus, JobStatus, ProposalStatus } from '../../generated/prisma/client';
 import { redeemDelegation } from '../agent/delegation-redeemer';
-import { getContract } from './contract';
+import { getContractForEvents } from './contract';
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -217,30 +217,34 @@ export function startEventIndexer(): void {
     return;
   }
 
+  let contract: ethers.Contract;
   try {
-    const contract = getContract();
+    contract = getContractForEvents();
     attachListeners(contract);
     _contract = contract;
-    console.log(`✅ Event indexer listening on ${config.DEALFORGE_CONTRACT_ADDRESS}`);
+    console.log(`✅ Event indexer listening via Alchemy WS on ${config.DEALFORGE_CONTRACT_ADDRESS}`);
   } catch (err) {
     console.error('[indexer] Failed to start:', err);
-    // Retry after 60 s
     setTimeout(startEventIndexer, 60_000);
     return;
   }
 
-  // Reconnect if the provider goes silent
-  const provider = _contract!.runner as ethers.JsonRpcProvider;
-  provider.on('error', (err: Error) => {
-    console.error('[indexer] Provider error — reconnecting in 10 s:', err.message);
+  // Reconnect on WebSocket close or error
+  const wsProvider = _contract!.runner as ethers.WebSocketProvider;
+  const reconnect = (label: string) => () => {
+    console.error(`[indexer] WS ${label} — reconnecting in 10 s`);
     stopEventIndexer();
     setTimeout(startEventIndexer, 10_000);
-  });
+  };
+  wsProvider.websocket.onclose = reconnect('closed');
+  wsProvider.websocket.onerror = reconnect('error');
 }
 
 export function stopEventIndexer(): void {
   if (_contract) {
     _contract.removeAllListeners();
+    const wsProvider = _contract.runner as ethers.WebSocketProvider;
+    wsProvider.destroy().catch(() => {});
     _contract = null;
   }
 }

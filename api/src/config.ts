@@ -47,6 +47,8 @@ const envSchema = z.object({
   // Blockchain
   BASE_RPC_URL: z.string().url().default('https://mainnet.base.org'),
   BASE_SEPOLIA_RPC_URL: z.string().url().default('https://sepolia.base.org'),
+  BASE_WS_URL: z.string().url().optional(),
+  BASE_SEPOLIA_WS_URL: z.string().url().optional(),
   DEALFORGE_CONTRACT_ADDRESS: z
     .string()
     .regex(/^0x[0-9a-fA-F]{40}$/)

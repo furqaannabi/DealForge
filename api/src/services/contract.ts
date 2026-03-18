@@ -22,6 +22,20 @@ function getRpcUrl(): string {
     : config.BASE_SEPOLIA_RPC_URL;
 }
 
+function getWsUrl(): string {
+  const url = config.NODE_ENV === 'production'
+    ? config.BASE_WS_URL
+    : config.BASE_SEPOLIA_WS_URL;
+  if (!url) {
+    throw new Error(
+      config.NODE_ENV === 'production'
+        ? 'BASE_WS_URL is not set in environment'
+        : 'BASE_SEPOLIA_WS_URL is not set in environment',
+    );
+  }
+  return url;
+}
+
 export function getProvider(): ethers.JsonRpcProvider {
   return new ethers.JsonRpcProvider(getRpcUrl());
 }
@@ -30,6 +44,13 @@ export function getContract(): ethers.Contract {
   const address = config.DEALFORGE_CONTRACT_ADDRESS;
   if (!address) throw new Error('DEALFORGE_CONTRACT_ADDRESS is not set in environment');
   return new ethers.Contract(address, DEALFORGE_ABI, getProvider());
+}
+
+/** Returns a contract instance backed by an Alchemy WebSocket provider for real-time event streaming. */
+export function getContractForEvents(): ethers.Contract {
+  const address = config.DEALFORGE_CONTRACT_ADDRESS;
+  if (!address) throw new Error('DEALFORGE_CONTRACT_ADDRESS is not set in environment');
+  return new ethers.Contract(address, DEALFORGE_ABI, new ethers.WebSocketProvider(getWsUrl()));
 }
 
 // ─── Types ────────────────────────────────────────────────────────────────────
