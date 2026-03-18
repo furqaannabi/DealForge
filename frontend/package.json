@@ -9,9 +9,23 @@
     "lint": "next lint"
   },
   "dependencies": {
+    "@base-org/account": "^2.5.2",
+    "@coinbase/wallet-sdk": "^4.3.7",
+    "@metamask/sdk": "^0.34.0",
+    "@metamask/smart-accounts-kit": "^0.4.0-beta.1",
+    "@react-native-async-storage/async-storage": "^3.0.1",
+    "@safe-global/safe-apps-provider": "^0.18.6",
+    "@safe-global/safe-apps-sdk": "^9.1.0",
+    "@tanstack/react-query": "^5.90.21",
+    "@walletconnect/ethereum-provider": "^2.23.8",
+    "connectkit": "^1.9.1",
+    "ethers": "^6.16.0",
     "next": "15.3.6",
+    "porto": "^0.2.37",
     "react": "19.0.0",
-    "react-dom": "19.0.0"
+    "react-dom": "19.0.0",
+    "viem": "^2.47.5",
+    "wagmi": "^3.5.0"
   },
   "devDependencies": {
     "@types/node": "22.14.0",

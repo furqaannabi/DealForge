@@ -1,27 +1,35 @@
 import { DEMO_AGENT_ADDRESS } from '@/lib/config';
-import type { AgentDealsResponse, AgentsListResponse } from '@/lib/types/api';
+import type {
+  AgentDealsResponse,
+  AgentRegistrationRequest,
+  AgentsListResponse,
+} from '@/lib/types/api';
 import { apiRequest } from './http';
 
 export async function listAgents() {
   return apiRequest<AgentsListResponse>('/agents');
 }
 
-export async function ensureDemoAgentRegistered() {
+export async function registerAgent(address: string, payload: AgentRegistrationRequest) {
   return apiRequest('/agents', {
     method: 'POST',
     headers: {
-      'x-agent-address': DEMO_AGENT_ADDRESS,
+      'x-agent-address': address,
     },
-    body: JSON.stringify({
-      capabilities: ['data-analysis', 'python', 'web-scraping'],
-      pricing_policy: {
-        min_price_wei: '10000000000000000',
-        max_price_wei: '1000000000000000000',
-        preferred_deadline_hours: 24,
-      },
-      description: 'Frontend demo task agent wired to the DealForge coordination API.',
-      ens_name: 'myagent.eth',
-    }),
+    body: JSON.stringify(payload),
+  });
+}
+
+export async function ensureDemoAgentRegistered(address = DEMO_AGENT_ADDRESS) {
+  return registerAgent(address, {
+    capabilities: ['data-analysis', 'python', 'web-scraping'],
+    pricing_policy: {
+      min_price_wei: '10000000000000000',
+      max_price_wei: '1000000000000000000',
+      preferred_deadline_hours: 24,
+    },
+    description: 'Frontend demo task agent wired to the DealForge coordination API.',
+    ens_name: 'myagent.eth',
   });
 }
 

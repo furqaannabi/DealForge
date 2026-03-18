@@ -378,6 +378,12 @@ textarea {
   background: var(--panel-soft);
 }
 
+.button:disabled {
+  cursor: wait;
+  opacity: 0.6;
+  transform: none;
+}
+
 .button-primary {
   background: var(--text);
   border-color: var(--text);
@@ -546,6 +552,60 @@ textarea {
   color: var(--text);
 }
 
+.terminal-toolbar {
+  display: grid;
+  gap: 14px;
+  padding: 20px 20px 10px;
+}
+
+.wallet-strip,
+.wallet-note,
+.delegation-panel {
+  border: 1px solid var(--line);
+  border-radius: 18px;
+  background: rgba(255, 255, 255, 0.02);
+}
+
+.wallet-strip {
+  padding: 14px 16px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  flex-wrap: wrap;
+}
+
+.wallet-summary,
+.wallet-note {
+  display: grid;
+  gap: 6px;
+}
+
+.wallet-status-row,
+.wallet-notes,
+.delegation-meta {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.wallet-notes {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.wallet-note {
+  padding: 12px 14px;
+}
+
+.terminal-inline-note {
+  margin: 0;
+  padding: 0 20px;
+  color: var(--muted);
+}
+
 .terminal-form {
   padding: 20px;
   display: grid;
@@ -603,6 +663,53 @@ textarea {
   border: 1px solid var(--line);
   background: var(--panel-soft);
   font-size: 0.84rem;
+}
+
+.pill-live {
+  color: var(--text);
+  background: rgba(255, 255, 255, 0.08);
+}
+
+.pill-warning {
+  border-color: rgba(255, 255, 255, 0.24);
+}
+
+.delegation-panel {
+  margin: 0 20px 20px;
+  padding: 18px;
+  display: grid;
+  gap: 12px;
+}
+
+.delegation-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.delegation-head h2 {
+  margin: 0;
+  font-size: 1rem;
+}
+
+.delegation-lead {
+  margin: 0;
+  color: var(--muted);
+  line-height: 1.6;
+}
+
+.delegation-code {
+  margin: 0;
+  padding: 14px;
+  max-height: 260px;
+  overflow: auto;
+  border-radius: 16px;
+  border: 1px solid var(--line);
+  background: var(--bg);
+  color: var(--text);
+  font-size: 0.8rem;
+  line-height: 1.55;
 }
 
 .deal-summary-bar {
