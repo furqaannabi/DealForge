@@ -7,10 +7,12 @@ import { requireEvaluationPayment, requireMatchesPayment } from '../middleware/p
 import { evaluateProposal } from '../services/negotiation-engine';
 import { uploadTaskDescription } from '../services/ipfs';
 import { findMatches } from '../services/matchmaker';
+import { createSubDelegation } from '../services/delegation'; 
 
 const router = Router();
 
 // ─── Validation schemas ─────────────────────────────────────────────────────
+
 
 const postJobSchema = z.object({
   title: z.string().min(3).max(255),
@@ -26,7 +28,20 @@ const proposalSchema = z.object({
   message: z.string().min(1).max(2000),
 });
 
-// ─── GET /jobs — List open jobs ─────────────────────────────────────────────
+// NEW — frontend sends signed delegation when posting a job
+const delegationSchema = z.object({
+  delegate: z.string(),
+  delegator: z.string(),
+  authority: z.string(),
+  caveats: z.array(z.object({
+    enforcer: z.string(),
+    terms: z.string(),
+  })),
+  salt: z.string(),
+  signature: z.string(),
+});
+
+// ─── GET /jobs  ───────────────────────────────────────────────────
 
 router.get('/', async (req, res) => {
   const {
@@ -55,7 +70,7 @@ router.get('/', async (req, res) => {
   res.json({ jobs, total, limit: parseInt(limit, 10), offset: parseInt(offset, 10) });
 });
 
-// ─── GET /jobs/:id — Single job ─────────────────────────────────────────────
+// ─── GET /jobs/:id — ───────────────────────────────────────────────
 
 router.get('/:id', async (req, res) => {
   const job = await db.job.findUnique({
@@ -70,11 +85,16 @@ router.get('/:id', async (req, res) => {
   res.json({ ...job, proposal_count: job._count.proposals });
 });
 
-// ─── POST /jobs — Create a job ───────────────────────────────────────────────
+// ─── POST /jobs —  now also accepts + stores signed delegation ────────
 
 router.post('/', requireAuth, async (req, res) => {
   const parsed = postJobSchema.safeParse(req.body);
   if (!parsed.success) { res.status(400).json({ error: parsed.error.flatten() }); return; }
+
+  // NEW — delegation is optional here (user signs it on frontend)
+  // If provided, we store it alongside the job
+  const delegationParsed = delegationSchema.safeParse(req.body.delegation);
+  const signedDelegation = delegationParsed.success ? delegationParsed.data : null;
 
   const agentExists = await db.agent.findUnique({ where: { address: req.agentAddress! } });
   if (!agentExists) {
@@ -92,6 +112,9 @@ router.post('/', requireAuth, async (req, res) => {
       maxBudget: max_budget,
       deadline: BigInt(deadline),
       category,
+      // NEW — store the raw signed delegation JSON from user's MetaMask
+      // Add delegationJson Json? to your Prisma schema on the Job model
+      ...(signedDelegation ? { delegationJson: signedDelegation } : {}),
     },
   });
 
@@ -119,7 +142,7 @@ router.post('/', requireAuth, async (req, res) => {
   }
 });
 
-// ─── GET /jobs/:id/matches — Ranked worker agents ───────────────────────────
+// ─── GET /jobs/:id/matches  ──────────────────────────────────────
 
 router.get('/:id/matches', requireMatchesPayment, async (req, res) => {
   const job = await db.job.findUnique({ where: { id: req.params.id } });
@@ -129,7 +152,7 @@ router.get('/:id/matches', requireMatchesPayment, async (req, res) => {
   res.json({ matches });
 });
 
-// ─── GET /jobs/:id/proposals — All proposals ────────────────────────────────
+// ─── GET /jobs/:id/proposals  ────────────────────────────────────
 
 router.get('/:id/proposals', async (req, res) => {
   const proposals = await db.proposal.findMany({
@@ -140,7 +163,7 @@ router.get('/:id/proposals', async (req, res) => {
   res.json({ proposals });
 });
 
-// ─── POST /jobs/:id/proposals — Submit a proposal ───────────────────────────
+// ─── POST /jobs/:id/proposals  ───────────────────────────────────
 
 router.post('/:id/proposals', requireAuth, async (req, res) => {
   const parsed = proposalSchema.safeParse(req.body);
@@ -178,7 +201,8 @@ router.post('/:id/proposals', requireAuth, async (req, res) => {
   res.status(201).json(proposal);
 });
 
-// ─── POST /jobs/:id/proposals/:pid/evaluate — NegotiationEngine ──────────────
+// ─── POST /jobs/:id/proposals/:pid/evaluate  ───────────────────────
+// Only change: when decision is "accept", also create sub-delegation
 
 router.post('/:id/proposals/:pid/evaluate', requireAuth, requireEvaluationPayment, async (req, res) => {
   const [job, proposal] = await Promise.all([
@@ -213,7 +237,56 @@ router.post('/:id/proposals/:pid/evaluate', requireAuth, requireEvaluationPaymen
     }
   });
 
-  res.json(evaluation);
+  // NEW — when accepted, create sub-delegation from parent delegation
+  // This is the core novel pattern: negotiation outcome → on-chain permission
+  let subDelegation = null;
+  if (evaluation.decision === 'accept' && evaluation.caveat_params) {
+    try {
+      // job.delegationJson is the parent delegation user signed on frontend
+      const parentDelegation = (job as any).delegationJson;
+
+      if (parentDelegation) {
+        subDelegation = await createSubDelegation({
+          parentDelegation,
+          workerAddress: proposal.workerAddress,
+          dealId: job.id,
+          caveatParams: evaluation.caveat_params,
+        });
+
+        // Store sub-delegation on the proposal so worker agent can fetch + redeem it
+        await db.proposal.update({
+          where: { id: proposal.id },
+          data: { subDelegationJson: subDelegation } as any,
+        });
+      }
+    } catch (err) {
+      // Non-fatal — log but don't fail the evaluation response
+      // Worker can still be paid via manual settleDeal fallback
+      console.error('[evaluate] Sub-delegation creation failed:', err);
+    }
+  }
+
+  res.json({
+    ...evaluation,
+    // Return sub-delegation to worker agent so it knows it can redeem
+    sub_delegation: subDelegation,
+  });
+});
+
+// ─── NEW: GET /jobs/:id/delegation — worker fetches parent delegation ────────
+// Worker agent calls this to get the delegation before redeeming
+
+router.get('/:id/delegation', requireAuth, async (req, res) => {
+  const job = await db.job.findUnique({ where: { id: req.params.id } });
+  if (!job) { res.status(404).json({ error: 'Job not found' }); return; }
+
+  const delegation = (job as any).delegationJson;
+  if (!delegation) {
+    res.status(404).json({ error: 'No delegation found for this job' });
+    return;
+  }
+
+  res.json({ delegation });
 });
 
 export default router;
