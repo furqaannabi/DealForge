@@ -45,24 +45,40 @@ async function fetchByCid<T>(cid: string): Promise<T> {
   return res.json() as Promise<T>;
 }
 
-export async function fetchTask(taskHashBytes32: string): Promise<TaskDescription> {
+interface DealRecord {
+  taskCid?: string;
+  resultCid?: string;
+  job?: { taskDescriptionCid?: string } | null;
+}
+
+async function fetchDealRecord(dealId: bigint): Promise<DealRecord | null> {
+  if (!config.API_BASE_URL) return null;
+  try {
+    const res = await fetch(`${config.API_BASE_URL}/deals/${dealId}`, { signal: AbortSignal.timeout(10_000) });
+    if (!res.ok) return null;
+    return res.json() as Promise<DealRecord>;
+  } catch {
+    return null;
+  }
+}
+
+export async function fetchTask(taskHashBytes32: string, dealId?: bigint): Promise<TaskDescription> {
+  if (dealId !== undefined) {
+    const deal = await fetchDealRecord(dealId);
+    const cid = deal?.taskCid ?? deal?.job?.taskDescriptionCid;
+    if (cid) return fetchByCid<TaskDescription>(cid);
+  }
+  // Fallback: reconstruct CIDv0 from bytes32
   const cid = bytes32ToCid(taskHashBytes32);
   return fetchByCid<TaskDescription>(cid);
 }
 
 export async function fetchResult(resultHashBytes32: string, dealId?: bigint): Promise<TaskResult> {
-  // Get the stored CIDv1 from the API DB (avoids CIDv0/v1 mismatch)
-  if (config.API_BASE_URL && dealId !== undefined) {
-    try {
-      const res = await fetch(`${config.API_BASE_URL}/deals/${dealId}`, { signal: AbortSignal.timeout(10_000) });
-      if (res.ok) {
-        const deal = await res.json() as { resultCid?: string };
-        if (deal.resultCid) return fetchByCid<TaskResult>(deal.resultCid);
-      }
-    } catch {
-      // fall through
-    }
+  if (dealId !== undefined) {
+    const deal = await fetchDealRecord(dealId);
+    if (deal?.resultCid) return fetchByCid<TaskResult>(deal.resultCid);
   }
+  // Fallback: reconstruct CIDv0 from bytes32
   const cid = bytes32ToCid(resultHashBytes32);
   return fetchByCid<TaskResult>(cid);
 }

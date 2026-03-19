@@ -16,6 +16,7 @@ const mirrorDealSchema = z.object({
   deal_id: z.number().int().nonnegative(),
   tx_hash: z.string().regex(/^0x[0-9a-fA-F]{64}$/, 'must be a valid tx hash'),
   job_id: z.string().optional(),
+  task_cid: z.string().optional(), // explicit CID when not going through job flow
 });
 
 const delegationSchema = z.object({
@@ -77,7 +78,7 @@ router.get('/:dealId', async (req, res) => {
 
   const deal = await db.deal.findUnique({
     where: { dealId },
-    include: { job: { select: { title: true, description: true, category: true } } },
+    include: { job: { select: { title: true, description: true, category: true, taskDescriptionCid: true } } },
   });
 
   if (!deal) { res.status(404).json({ error: 'Deal not found' }); return; }
@@ -126,7 +127,7 @@ router.post('/', requireAuth, async (req, res) => {
     return;
   }
 
-  const { deal_id, tx_hash, job_id } = parsed.data;
+  const { deal_id, tx_hash, job_id, task_cid } = parsed.data;
   const dealId = BigInt(deal_id);
 
   // Verify deal exists on-chain (throws if not found / RPC error)
@@ -144,7 +145,8 @@ router.post('/', requireAuth, async (req, res) => {
     return;
   }
 
-  // If a job_id is provided, lock the linked job
+  // If a job_id is provided, lock the linked job and get its taskCid
+  let resolvedTaskCid: string | null = task_cid ?? null;
   if (job_id) {
     const job = await db.job.findUnique({ where: { id: job_id } });
     if (!job) { res.status(404).json({ error: 'Job not found' }); return; }
@@ -152,6 +154,7 @@ router.post('/', requireAuth, async (req, res) => {
       res.status(403).json({ error: 'Job does not belong to the caller' });
       return;
     }
+    resolvedTaskCid = job.taskDescriptionCid ?? resolvedTaskCid;
   }
 
   const settledAt = onChain.status === DealStatus.SETTLED ? new Date() : undefined;
@@ -166,11 +169,13 @@ router.post('/', requireAuth, async (req, res) => {
       amount: onChain.amount.toString(),
       status: onChain.status,
       txHash: tx_hash,
+      ...(resolvedTaskCid ? { taskCid: resolvedTaskCid } : {}),
       ...(settledAt ? { settledAt } : {}),
     },
     update: {
       status: onChain.status,
       txHash: tx_hash,
+      ...(resolvedTaskCid ? { taskCid: resolvedTaskCid } : {}),
       ...(settledAt ? { settledAt } : {}),
     },
   });
