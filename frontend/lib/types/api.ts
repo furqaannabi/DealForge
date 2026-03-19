@@ -123,6 +123,7 @@ export interface CreateJobRequest {
   max_budget: string;
   deadline: number;
   category: string;
+  delegation?: ApiDelegation;
 }
 
 export interface AgentRegistrationRequest {
