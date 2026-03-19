@@ -18,11 +18,11 @@ import {
 const DEALFORGE_INTERFACE = new ethers.Interface(['function settleDeal(uint256 dealId)']);
 
 function encodeJobIntentTerms(jobId: string): `0x${string}` {
-  return ethers.AbiCoder.defaultAbiCoder().encode(['string'], [jobId]) as `0x${string}`;
+  return ethers.AbiCoder.defaultAbiCoder().encode(['uint256'], [BigInt(jobId)]) as `0x${string}`;
 }
 
-function buildIntentCaveats(jobId: string) {
-  const terms = encodeJobIntentTerms(jobId);
+function buildIntentCaveats(dealId: string) {
+  const terms = encodeJobIntentTerms(dealId);
   const caveats = [];
 
   if (VERIFIER_CAVEAT_ADDRESS) {
@@ -40,7 +40,7 @@ export function canSignDelegation() {
   return Boolean(DEALFORGE_AGENT_ADDRESS && DEALFORGE_CONTRACT_ADDRESS);
 }
 
-export async function signSettlementDelegation(jobId: string, userAddress: string, walletClient: WalletClient) {
+export async function signSettlementDelegation(dealId: string, userAddress: string, walletClient: WalletClient) {
   if (!canSignDelegation()) {
     return null;
   }
@@ -56,7 +56,7 @@ export async function signSettlementDelegation(jobId: string, userAddress: strin
       targets: [DEALFORGE_CONTRACT_ADDRESS as `0x${string}`],
       selectors: [DEALFORGE_INTERFACE.getFunction('settleDeal')!.selector as `0x${string}`],
     },
-    caveats: buildIntentCaveats(jobId),
+    caveats: buildIntentCaveats(dealId),
   });
 
   const delegationManagerAddress = environment.DelegationManager as `0x${string}`;

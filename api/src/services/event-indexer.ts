@@ -237,8 +237,12 @@ export function startEventIndexer(): void {
     stopEventIndexer();
     setTimeout(startEventIndexer, 10_000);
   };
-  wsProvider.websocket.onclose = reconnect('closed');
-  wsProvider.websocket.onerror = reconnect('error');
+  const rawSocket = wsProvider.websocket as {
+    onclose?: (() => void) | null;
+    onerror?: (() => void) | null;
+  };
+  rawSocket.onclose = reconnect('closed');
+  rawSocket.onerror = reconnect('error');
 }
 
 export function stopEventIndexer(): void {

@@ -71,6 +71,21 @@ export interface ApiDeal {
   } | null;
 }
 
+export interface ApiDelegationCaveat {
+  enforcer: string;
+  terms: string;
+  args?: string;
+}
+
+export interface ApiDelegation {
+  delegate: string;
+  delegator: string;
+  authority: string;
+  caveats: ApiDelegationCaveat[];
+  salt: string;
+  signature: string;
+}
+
 export interface JobsListResponse {
   jobs: ApiJob[];
   total: number;
@@ -93,6 +108,13 @@ export interface DealsListResponse {
   total: number;
   limit: number;
   offset: number;
+}
+
+export interface AttachDealDelegationResponse {
+  deal_id: string;
+  job_id: string;
+  delegation: ApiDelegation;
+  sub_delegation: ApiDelegation | null;
 }
 
 export interface CreateJobRequest {
