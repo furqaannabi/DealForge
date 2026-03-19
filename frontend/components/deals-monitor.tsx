@@ -202,7 +202,7 @@ export function DealsMonitor() {
                 </div>
                 <div className="meta-item">
                   <span>Transaction</span>
-                  <a href={`https://basescan.org/tx/${deal.txHash}`} target="_blank" rel="noreferrer">
+                  <a href={`https://sepolia.basescan.org/tx/${deal.txHash}`} target="_blank" rel="noreferrer">
                     {formatShortTxHash(deal.txHash)}
                   </a>
                 </div>
