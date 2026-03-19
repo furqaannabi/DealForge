@@ -2,7 +2,7 @@
 
 import { ChangeEvent, FormEvent, KeyboardEvent, useEffect, useMemo, useRef, useState } from 'react';
 import { ConnectKitButton } from 'connectkit';
-import { useAccount, useChainId, useWalletClient } from 'wagmi';
+import { useAccount, useChainId } from 'wagmi';
 import {
   DEALFORGE_AGENT_ADDRESS,
   DEALFORGE_CHAIN_ID,
@@ -122,7 +122,6 @@ function Typewriter({ text }: { text: string }) {
 export function TerminalComposer() {
   const { address, isConnected } = useAccount();
   const chainId = useChainId();
-  const { data: walletClient } = useWalletClient();
   const [input, setInput] = useState(DEFAULT_COMMAND);
   const [lines, setLines] = useState<TerminalLine[]>(initialTerminalLines);
   const [queuedResponse, setQueuedResponse] = useState<PendingTerminalLine[]>([]);
@@ -214,16 +213,12 @@ export function TerminalComposer() {
     try {
       let signedDelegation = null;
       if (!connectedAsTaskAgent && canSignDelegation()) {
-        if (!walletClient) {
-          throw new Error('Wallet client unavailable. Reconnect your wallet and try again.');
-        }
-
         if (wrongChain) {
           throw new Error(`Switch your wallet to ${DEALFORGE_CHAIN_NAME} before posting this job.`);
         }
 
         appendLine('agent', `Opening your wallet to authorize task agent ${formatAddress(DEALFORGE_AGENT_ADDRESS)}...`);
-        signedDelegation = await signSettlementDelegation(address, walletClient);
+        signedDelegation = await signSettlementDelegation(address);
         if (!signedDelegation) {
           throw new Error('Delegation signing is not configured in this frontend environment.');
         }
