@@ -38,36 +38,8 @@ function bytes32ToCid(bytes32: string): string {
 
 // ─── Fetch helpers ────────────────────────────────────────────────────────────
 
-let _pinata: import('pinata').PinataSDK | null = null;
-
-function getPinata(): import('pinata').PinataSDK | null {
-  if (!config.PINATA_JWT) return null;
-  if (!_pinata) {
-    const { PinataSDK } = require('pinata');
-    _pinata = new PinataSDK({
-      pinataJwt: config.PINATA_JWT,
-      pinataGateway: config.PINATA_GATEWAY,
-    });
-  }
-  return _pinata;
-}
-
 async function fetchByCid<T>(cid: string): Promise<T> {
-  // Preferred: proxy through the coordination API (has Pinata JWT, no auth needed from caller)
-  if (config.API_BASE_URL) {
-    const url = `${config.API_BASE_URL}/ipfs/${cid}`;
-    const res = await fetch(url, { signal: AbortSignal.timeout(30_000) });
-    if (!res.ok) throw new Error(`API IPFS proxy error ${res.status} for CID ${cid}`);
-    return res.json() as Promise<T>;
-  }
-  // Fallback: Pinata SDK (if JWT configured in verifier env)
-  const pinata = getPinata();
-  if (pinata) {
-    const response = await pinata.gateways.public.get(cid);
-    return response.data as T;
-  }
-  // Last resort: raw public gateway
-  const url = `${config.IPFS_GATEWAY}/ipfs/${cid}`;
+  const url = `https://ipfs.io/ipfs/${cid}`;
   const res = await fetch(url, { signal: AbortSignal.timeout(30_000) });
   if (!res.ok) throw new Error(`IPFS gateway error ${res.status} for CID ${cid}`);
   return res.json() as Promise<T>;
@@ -79,17 +51,16 @@ export async function fetchTask(taskHashBytes32: string): Promise<TaskDescriptio
 }
 
 export async function fetchResult(resultHashBytes32: string, dealId?: bigint): Promise<TaskResult> {
-  // Prefer the CID stored in the API DB (CIDv1, bafy...) over the reconstructed CIDv0
+  // Get the stored CIDv1 from the API DB (avoids CIDv0/v1 mismatch)
   if (config.API_BASE_URL && dealId !== undefined) {
     try {
       const res = await fetch(`${config.API_BASE_URL}/deals/${dealId}`, { signal: AbortSignal.timeout(10_000) });
       if (res.ok) {
-        const deal = await res.json() as { result_cid?: string; resultCid?: string };
-        const storedCid = deal.result_cid ?? deal.resultCid;
-        if (storedCid) return fetchByCid<TaskResult>(storedCid);
+        const deal = await res.json() as { resultCid?: string };
+        if (deal.resultCid) return fetchByCid<TaskResult>(deal.resultCid);
       }
     } catch {
-      // fall through to bytes32 reconstruction
+      // fall through
     }
   }
   const cid = bytes32ToCid(resultHashBytes32);
