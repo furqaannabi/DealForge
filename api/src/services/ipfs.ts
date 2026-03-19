@@ -99,15 +99,9 @@ export async function uploadNegotiationLog(
 // ─── Retrieve content by CID ──────────────────────────────────────────────────
 
 export async function fetchByCid<T = unknown>(cid: string): Promise<T> {
-  const gatewayBase = config.PINATA_GATEWAY
-    ? `https://${config.PINATA_GATEWAY}`
-    : 'https://gateway.pinata.cloud';
-  const url = `${gatewayBase}/ipfs/${cid}`;
-  const res = await fetch(url, {
-    headers: { Authorization: `Bearer ${config.PINATA_JWT}` },
-    signal: AbortSignal.timeout(30_000),
-  });
-  if (!res.ok) throw new Error(`Pinata gateway ${res.status} for CID ${cid}`);
+  const url = `https://ipfs.io/ipfs/${cid}`;
+  const res = await fetch(url, { signal: AbortSignal.timeout(30_000) });
+  if (!res.ok) throw new Error(`IPFS gateway ${res.status} for CID ${cid}`);
   return res.json() as Promise<T>;
 }
 
