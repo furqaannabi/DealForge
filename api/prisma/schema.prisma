@@ -134,6 +134,7 @@ model Deal {
   amount    String // wei as string
   status    DealStatus @default(CREATED)
   txHash    String     @map("tx_hash")
+  taskCid   String?    @map("task_cid")   // IPFS CID of the task description
   resultCid String?    @map("result_cid") // IPFS CID of the worker's submitted result
   settledAt DateTime?  @map("settled_at")
   createdAt DateTime   @default(now()) @map("created_at")
