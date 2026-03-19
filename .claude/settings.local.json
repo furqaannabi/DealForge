@@ -8,7 +8,12 @@
       "WebFetch(domain:ai.google.dev)",
       "WebSearch",
       "WebFetch(domain:developers.googleblog.com)",
-      "WebFetch(domain:colab.research.google.com)"
+      "WebFetch(domain:colab.research.google.com)",
+      "Bash(yarn dev:*)",
+      "Bash(netstat -ano)",
+      "Bash(taskkill /PID 14016 /F)",
+      "Bash(cmd /c \"taskkill /PID 14016 /F\")",
+      "Bash(powershell -Command \"Stop-Process -Id 14016 -Force -ErrorAction SilentlyContinue; Start-Sleep -Milliseconds 500; netstat -ano | Select-String '':8080''\")"
     ]
   }
 }

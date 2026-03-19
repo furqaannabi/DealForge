@@ -1,6 +1,8 @@
 import { config } from './config';
 import { startHealthServer } from './health';
 import { startListener, stopListener } from './listener';
+import { ensureStaked } from './stake';
+import { scanExistingDeals } from './scan';
 
 console.log(`🔍 DealForge Verification Node starting`);
 console.log(`   Node ID   → ${config.NODE_ID}`);
@@ -9,7 +11,14 @@ console.log(`   RPC       → ${config.RPC_URL}`);
 console.log(`   Max jobs  → ${config.MAX_CONCURRENT_JOBS}`);
 
 startHealthServer();
-startListener();
+
+ensureStaked()
+  .then(() => scanExistingDeals())
+  .then(() => startListener())
+  .catch((err) => {
+    console.error('[startup] Error during init — starting listener anyway:', err);
+    startListener();
+  });
 
 const shutdown = () => {
   console.log('\nShutting down…');

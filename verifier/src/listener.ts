@@ -20,28 +20,30 @@ const ABI = [
 // Limit concurrent verifications to avoid RPC / LLM rate limits
 const inFlight = new Set<bigint>();
 
-async function handleResultSubmitted(
-  rawDealId: bigint,
-  resultHash: string,
-  _submittedAt: bigint,
-  event: ethers.EventLog,
-): Promise<void> {
-  const dealId = BigInt(rawDealId);
+// ─── Core pipeline (shared by live listener and startup scan) ─────────────────
 
+export async function processSubmittedDeal(
+  dealId: bigint,
+  provider: ethers.Provider,
+): Promise<void> {
   if (inFlight.size >= config.MAX_CONCURRENT_JOBS) {
-    console.warn(`[listener] Max concurrent jobs (${config.MAX_CONCURRENT_JOBS}) reached — skipping deal #${dealId} (will not retry)`);
+    console.warn(`[listener] Max concurrent jobs (${config.MAX_CONCURRENT_JOBS}) reached — skipping deal #${dealId}`);
     return;
   }
   if (inFlight.has(dealId)) return;
   inFlight.add(dealId);
 
-  console.log(`[listener] ResultSubmitted #${dealId} resultHash=${resultHash} tx=${event.transactionHash}`);
-
   try {
     // ── 1. Fetch deal from chain ──────────────────────────────────────────────
-    const provider = event.provider as ethers.JsonRpcProvider;
     const readContract = new ethers.Contract(config.CONTRACT_ADDRESS, ABI, provider);
     const deal = await readContract.getDeal(dealId);
+
+    // Skip if no longer SUBMITTED (another verifier may have already acted)
+    // Contract DealStatus enum: 0=CREATED 1=ACTIVE 2=SUBMITTED 3=SETTLED 4=REFUNDED 5=DISPUTED
+    if (Number(deal.status) !== 2) {
+      console.log(`[listener] Deal #${dealId} is no longer SUBMITTED (status=${deal.status}) — skipping`);
+      return;
+    }
 
     const taskHashHex: string = deal.taskHash;
     const resultHashHex: string = deal.resultHash;
@@ -73,6 +75,17 @@ async function handleResultSubmitted(
   } finally {
     inFlight.delete(dealId);
   }
+}
+
+async function handleResultSubmitted(
+  rawDealId: bigint,
+  _resultHash: string,
+  _submittedAt: bigint,
+  event: ethers.EventLog,
+): Promise<void> {
+  const dealId = BigInt(rawDealId);
+  console.log(`[listener] ResultSubmitted #${dealId} tx=${event.transactionHash}`);
+  await processSubmittedDeal(dealId, event.provider as ethers.Provider);
 }
 
 let _contract: ethers.Contract | null = null;

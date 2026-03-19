@@ -35,6 +35,9 @@ const envSchema = z.object({
   // Runtime
   PORT: z.coerce.number().default(8080),
   MAX_CONCURRENT_JOBS: z.coerce.number().int().positive().default(5),
+
+  // Coordination API (used to scan for existing SUBMITTED deals on startup)
+  API_BASE_URL: z.string().url().optional(),
 });
 
 function loadConfig() {
