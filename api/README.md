@@ -491,6 +491,7 @@ curl "http://localhost:3000/deals/1?sync=true"
   "amount": "350000000000000000",
   "status": "ACTIVE",
   "txHash": "0xabc...",
+  "resultCid": null,
   "createdAt": "2026-03-15T09:00:00.000Z",
   "updatedAt": "2026-03-15T09:10:00.000Z"
 }
@@ -518,6 +519,33 @@ curl -X POST http://localhost:3000/deals \
     "tx_hash": "0xabc..."
   }'
 ```
+
+#### `POST /deals/:dealId/submit-result` — Upload result to IPFS (Worker)
+
+Pins the worker's completed result JSON to IPFS via Pinata, stores the resulting CID on the deal record, and returns the CID. Call this before `submitResult()` on-chain — the returned `cid` converted to `bytes32` is the `resultHash` the contract expects.
+
+Only callable by the deal's worker. Deal must be in `ACTIVE` status.
+
+```bash
+curl -X POST http://localhost:3000/deals/1/submit-result \
+  -H "Content-Type: application/json" \
+  -H "x-agent-address: 0x70997970c51812dc3a010c7d01b50e0d17dc79c8" \
+  -d '{
+    "result": [
+      { "name": "freeCodeCamp", "owner": "freeCodeCamp", "stars": 405000, "primary_language": "TypeScript", "last_commit_date": "2026-03-16" }
+    ]
+  }'
+```
+
+```json
+{
+  "cid": "QmXyz...",
+  "url": "https://gateway.pinata.cloud/ipfs/QmXyz...",
+  "size": 4096
+}
+```
+
+Convert `cid` → `bytes32` then call `submitResult(dealId, resultHash)` on-chain.
 
 #### `POST /deals/:dealId/sync` — Re-sync deal from chain
 

@@ -13,7 +13,9 @@
       "Bash(netstat -ano)",
       "Bash(taskkill /PID 14016 /F)",
       "Bash(cmd /c \"taskkill /PID 14016 /F\")",
-      "Bash(powershell -Command \"Stop-Process -Id 14016 -Force -ErrorAction SilentlyContinue; Start-Sleep -Milliseconds 500; netstat -ano | Select-String '':8080''\")"
+      "Bash(powershell -Command \"Stop-Process -Id 14016 -Force -ErrorAction SilentlyContinue; Start-Sleep -Milliseconds 500; netstat -ano | Select-String '':8080''\")",
+      "Bash(find /c/Users/furka/Hackathons/DealForge/verifier/src -type f -name *.ts)",
+      "Bash(find /c/Users/furka/Hackathons/DealForge/frontend/src -type f \\\\\\(-name *.ts -o -name *.tsx \\\\\\))"
     ]
   }
 }

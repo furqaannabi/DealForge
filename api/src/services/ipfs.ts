@@ -79,6 +79,14 @@ export async function uploadTaskResult(
   );
 }
 
+// Upload raw worker result (any JSON) keyed by dealId
+export async function uploadRawResult(
+  dealId: bigint | string,
+  data: unknown,
+): Promise<UploadResult> {
+  return uploadJson(data, `result-deal-${dealId}.json`);
+}
+
 // ─── Negotiation log ──────────────────────────────────────────────────────────
 
 export async function uploadNegotiationLog(
