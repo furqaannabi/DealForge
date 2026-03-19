@@ -1,54 +1,107 @@
 import { ethers } from 'ethers';
 import {
+  Implementation,
   ROOT_AUTHORITY,
-  createCaveat,
   createDelegation,
   getSmartAccountsEnvironment,
+  toMetaMaskSmartAccount,
   type Delegation,
 } from '@metamask/smart-accounts-kit';
-import type { WalletClient } from 'viem';
+import type { ApiDelegation } from '@/lib/types/api';
+import { createPublicClient, createWalletClient, custom, getAddress, http } from 'viem';
+import { base, baseSepolia } from 'viem/chains';
 import {
   DEALFORGE_AGENT_ADDRESS,
   DEALFORGE_CHAIN_ID,
   DEALFORGE_CONTRACT_ADDRESS,
-  IPFS_CAVEAT_ADDRESS,
-  VERIFIER_CAVEAT_ADDRESS,
 } from '@/lib/config';
 
 const DEALFORGE_INTERFACE = new ethers.Interface(['function settleDeal(uint256 dealId)']);
 
-function encodeJobIntentTerms(jobId: string): `0x${string}` {
-  return ethers.AbiCoder.defaultAbiCoder().encode(['uint256'], [BigInt(jobId)]) as `0x${string}`;
-}
-
-function buildIntentCaveats(dealId: string) {
-  const terms = encodeJobIntentTerms(dealId);
-  const caveats = [];
-
-  if (VERIFIER_CAVEAT_ADDRESS) {
-    caveats.push(createCaveat(VERIFIER_CAVEAT_ADDRESS as `0x${string}`, terms));
-  }
-
-  if (IPFS_CAVEAT_ADDRESS) {
-    caveats.push(createCaveat(IPFS_CAVEAT_ADDRESS as `0x${string}`, terms));
-  }
-
-  return caveats;
-}
+type Eip1193Provider = {
+  request(args: { method: string; params?: unknown[] | object }): Promise<unknown>;
+};
 
 export function canSignDelegation() {
   return Boolean(DEALFORGE_AGENT_ADDRESS && DEALFORGE_CONTRACT_ADDRESS);
 }
 
-export async function signSettlementDelegation(dealId: string, userAddress: string, walletClient: WalletClient) {
+function getActiveChain() {
+  return DEALFORGE_CHAIN_ID === base.id ? base : baseSepolia;
+}
+
+function getInjectedProvider() {
+  if (typeof window === 'undefined') {
+    return null;
+  }
+
+  return ((window as Window & { ethereum?: Eip1193Provider }).ethereum ?? null);
+}
+
+async function assertOwnerEoaAddress(ownerAddress: `0x${string}`) {
+  const publicClient = createPublicClient({
+    chain: getActiveChain(),
+    transport: http(),
+  });
+
+  const deployedCode = await publicClient.getCode({ address: ownerAddress });
+  if (deployedCode && deployedCode !== '0x') {
+    throw new Error(
+      'Connect the EOA owner account in MetaMask. DealForge derives a MetaMask smart account from that owner, so the connected address cannot already be a contract account.',
+    );
+  }
+}
+
+function serializeDelegation(delegation: Delegation): ApiDelegation {
+  return {
+    delegate: delegation.delegate,
+    delegator: delegation.delegator,
+    authority: delegation.authority,
+    caveats: delegation.caveats.map((caveat) => ({
+      enforcer: caveat.enforcer,
+      terms: caveat.terms,
+      args: caveat.args,
+    })),
+    salt: delegation.salt.toString(),
+    signature: delegation.signature,
+  };
+}
+
+export async function signSettlementDelegation(userAddress: string) {
   if (!canSignDelegation()) {
     return null;
   }
 
-  const environment = getSmartAccountsEnvironment(DEALFORGE_CHAIN_ID);
-  const unsignedDelegation = createDelegation({
-    environment,
-    from: userAddress as `0x${string}`,
+  const provider = getInjectedProvider();
+  if (!provider) {
+    throw new Error('Injected wallet provider not available for delegation signing.');
+  }
+
+  const ownerAddress = getAddress(userAddress);
+  await assertOwnerEoaAddress(ownerAddress);
+
+  const chain = getActiveChain();
+  const publicClient = createPublicClient({
+    chain,
+    transport: http(),
+  });
+  const ownerWalletClient = createWalletClient({
+    account: ownerAddress,
+    chain,
+    transport: custom(provider),
+  });
+
+  const smartAccount = await toMetaMaskSmartAccount({
+    client: publicClient as never,
+    implementation: Implementation.Hybrid,
+    signer: { walletClient: ownerWalletClient as never },
+    deployParams: [ownerAddress, [], [], []] as never,
+    deploySalt: '0x',
+  } as never);
+
+  const delegation = createDelegation({
+    environment: getSmartAccountsEnvironment(DEALFORGE_CHAIN_ID),
+    from: smartAccount.address,
     to: DEALFORGE_AGENT_ADDRESS as `0x${string}`,
     parentDelegation: ROOT_AUTHORITY,
     scope: {
@@ -56,47 +109,21 @@ export async function signSettlementDelegation(dealId: string, userAddress: stri
       targets: [DEALFORGE_CONTRACT_ADDRESS as `0x${string}`],
       selectors: [DEALFORGE_INTERFACE.getFunction('settleDeal')!.selector as `0x${string}`],
     },
-    caveats: buildIntentCaveats(dealId),
   });
 
-  const delegationManagerAddress = environment.DelegationManager as `0x${string}`;
-  const { signature: _ignoredSignature, ...signableDelegation } = unsignedDelegation;
-
-  const signature = await walletClient.signTypedData({
-    account: walletClient.account!,
-    domain: {
-      name: 'DelegationManager',
-      version: '1',
-      chainId: DEALFORGE_CHAIN_ID,
-      verifyingContract: delegationManagerAddress,
-    },
-    types: {
-      Delegation: [
-        { name: 'delegate', type: 'address' },
-        { name: 'delegator', type: 'address' },
-        { name: 'authority', type: 'bytes32' },
-        { name: 'caveats', type: 'Caveat[]' },
-        { name: 'salt', type: 'uint256' },
-      ],
-      Caveat: [
-        { name: 'enforcer', type: 'address' },
-        { name: 'terms', type: 'bytes' },
-        { name: 'args', type: 'bytes' },
-      ],
-    },
-    primaryType: 'Delegation',
-    message: signableDelegation as never,
-  });
+  const signature = await smartAccount.signDelegation({ delegation });
+  const signedDelegation: Delegation = {
+    ...delegation,
+    signature,
+  };
 
   return {
-    delegation: {
-      ...unsignedDelegation,
-      signature,
-    } as Delegation,
-    delegationManagerAddress,
+    delegation: serializeDelegation(signedDelegation),
+    delegationManagerAddress: smartAccount.environment.DelegationManager,
+    smartAccountAddress: smartAccount.address,
   };
 }
 
-export function formatDelegationPreview(delegation: Delegation) {
+export function formatDelegationPreview(delegation: ApiDelegation) {
   return JSON.stringify(delegation, null, 2);
 }
