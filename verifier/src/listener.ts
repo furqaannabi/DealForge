@@ -90,8 +90,28 @@ async function handleResultSubmitted(
 
 let _contract: ethers.Contract | null = null;
 
+function makeProvider(): ethers.Provider {
+  const wsUrl = config.WS_RPC_URL ?? (config.RPC_URL.startsWith('ws') ? config.RPC_URL : null);
+  if (wsUrl) {
+    const ws = new ethers.WebSocketProvider(wsUrl);
+    (ws.websocket).onerror = () => {
+      console.error('[listener] WebSocket closed — reconnecting in 10 s');
+      stopListener();
+      setTimeout(startListener, 10_000);
+    };
+    return ws;
+  }
+  const http = new ethers.JsonRpcProvider(config.RPC_URL);
+  http.on('error', (err: Error) => {
+    console.error('[listener] Provider error — reconnecting in 10 s:', err.message);
+    stopListener();
+    setTimeout(startListener, 10_000);
+  });
+  return http;
+}
+
 export function startListener(): void {
-  const provider = new ethers.JsonRpcProvider(config.RPC_URL);
+  const provider = makeProvider();
   const contract = new ethers.Contract(config.CONTRACT_ADDRESS, ABI, provider);
 
   contract.on('ResultSubmitted', handleResultSubmitted);
@@ -106,14 +126,7 @@ export function startListener(): void {
 
   _contract = contract;
 
-  // Reconnect on provider errors
-  (provider as ethers.JsonRpcProvider).on('error', (err: Error) => {
-    console.error('[listener] Provider error — reconnecting in 10 s:', err.message);
-    stopListener();
-    setTimeout(startListener, 10_000);
-  });
-
-  console.log(`✅ Listener active on ${config.CONTRACT_ADDRESS} via ${config.RPC_URL}`);
+  console.log(`✅ Listener active on ${config.CONTRACT_ADDRESS}`);
 }
 
 export function stopListener(): void {

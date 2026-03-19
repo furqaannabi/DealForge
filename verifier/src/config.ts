@@ -16,6 +16,7 @@ const DEFAULT_LLMS = {
 const envSchema = z.object({
   // Blockchain
   RPC_URL: z.string().url().default('https://sepolia.base.org'),
+  WS_RPC_URL: z.string().optional(), // WebSocket RPC (preferred for event listening)
   CONTRACT_ADDRESS: z.string().regex(/^0x[0-9a-fA-F]{40}$/, 'must be a valid address'),
   PRIVATE_KEY: z.string().regex(/^0x[0-9a-fA-F]{64}$/, 'must be a 32-byte hex private key'),
 
