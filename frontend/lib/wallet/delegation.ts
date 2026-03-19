@@ -1,7 +1,6 @@
 import { ethers } from 'ethers';
 import {
   ROOT_AUTHORITY,
-  createCaveat,
   createDelegation,
   getSmartAccountsEnvironment,
   type Delegation,
@@ -11,36 +10,15 @@ import {
   DEALFORGE_AGENT_ADDRESS,
   DEALFORGE_CHAIN_ID,
   DEALFORGE_CONTRACT_ADDRESS,
-  IPFS_CAVEAT_ADDRESS,
-  VERIFIER_CAVEAT_ADDRESS,
 } from '@/lib/config';
 
 const DEALFORGE_INTERFACE = new ethers.Interface(['function settleDeal(uint256 dealId)']);
-
-function encodeJobIntentTerms(jobId: string): `0x${string}` {
-  return ethers.AbiCoder.defaultAbiCoder().encode(['uint256'], [BigInt(jobId)]) as `0x${string}`;
-}
-
-function buildIntentCaveats(dealId: string) {
-  const terms = encodeJobIntentTerms(dealId);
-  const caveats = [];
-
-  if (VERIFIER_CAVEAT_ADDRESS) {
-    caveats.push(createCaveat(VERIFIER_CAVEAT_ADDRESS as `0x${string}`, terms));
-  }
-
-  if (IPFS_CAVEAT_ADDRESS) {
-    caveats.push(createCaveat(IPFS_CAVEAT_ADDRESS as `0x${string}`, terms));
-  }
-
-  return caveats;
-}
 
 export function canSignDelegation() {
   return Boolean(DEALFORGE_AGENT_ADDRESS && DEALFORGE_CONTRACT_ADDRESS);
 }
 
-export async function signSettlementDelegation(dealId: string, userAddress: string, walletClient: WalletClient) {
+export async function signSettlementDelegation(userAddress: string, walletClient: WalletClient) {
   if (!canSignDelegation()) {
     return null;
   }
@@ -56,7 +34,6 @@ export async function signSettlementDelegation(dealId: string, userAddress: stri
       targets: [DEALFORGE_CONTRACT_ADDRESS as `0x${string}`],
       selectors: [DEALFORGE_INTERFACE.getFunction('settleDeal')!.selector as `0x${string}`],
     },
-    caveats: buildIntentCaveats(dealId),
   });
 
   const delegationManagerAddress = environment.DelegationManager as `0x${string}`;
