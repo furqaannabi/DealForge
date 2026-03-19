@@ -6,16 +6,24 @@ Independent result verification node for the DealForge protocol. Any number of v
 
 ## What it does
 
-1. Subscribes to the `ResultSubmitted` event emitted by `DealForge.sol`
-2. Fetches the task description and submitted result from IPFS (resolving the on-chain `bytes32` hash back to a CIDv0)
+**Startup sequence (once, in order):**
+
+1. **Auto-stake** — checks whether the wallet is registered as a verifier on-chain; calls `stakeVerifier()` with 0.01 ETH if not
+2. **Startup scan** — queries the Coordination API for all deals already in `SUBMITTED` state and runs the full verification pipeline on each (catches deals submitted before this node started)
+3. **Live listener** — subscribes to `ResultSubmitted` events for all future deals
+
+**Per-deal pipeline:**
+
+1. Re-reads deal state from chain — skips if no longer `SUBMITTED` (another verifier may have acted)
+2. Fetches the task description and result from IPFS (resolves on-chain `bytes32` → CIDv0)
 3. Routes to the appropriate verification strategy based on the task's `verificationPlan`:
    - **`schema_check`** — validates required fields and minimum record count; optionally spot-checks a random sample of rows
    - **`llm_judge`** — asks the configured LLM provider to score the result against evaluation criteria; ACCEPT if score ≥ threshold
    - **`random_sample`** — samples `sample_size` rows and checks that `check_fields` are non-empty on each
    - _(no plan)_ — falls back to a generic `llm_judge` with the criterion "Does the result fully satisfy the task specification?"
-4. Submits an on-chain vote via a funded wallet:
+4. Submits an on-chain vote via the funded wallet:
    - **ACCEPT** → calls `vote(dealId, true)` which records verifier approval; the worker's MetaMask delegation redemption then triggers settlement automatically via `DelegationManager`
-   - **REJECT** → calls `raiseDispute(dealId)` directly, placing the deal in a disputed state
+   - **REJECT** → calls `raiseDispute(dealId)` directly, placing the deal in a `DISPUTED` state
 
 ---
 
@@ -36,8 +44,13 @@ npm run build && npm start   # production
 ## Docker
 
 ```bash
+# standalone
 docker build -t dealforge-verifier .
-docker run --env-file .env dealforge-verifier
+docker run --env-file .env -p 8080:8080 dealforge-verifier
+
+# via root docker-compose (recommended — also starts postgres + redis)
+docker compose up -d verifier
+docker compose logs -f verifier
 ```
 
 The image exposes port `8080` and includes a `HEALTHCHECK` against `/health`.
@@ -60,6 +73,7 @@ The image exposes port `8080` and includes a `HEALTHCHECK` against `/health`.
 | `NODE_ID` | No | Unique identifier for this verifier instance (default: `verifier-01`) |
 | `PORT` | No | Health check HTTP port (default: `8080`) |
 | `MAX_CONCURRENT_JOBS` | No | Max simultaneous verifications in-flight (default: `5`) |
+| `API_BASE_URL` | No | Coordination API URL for startup scan of existing SUBMITTED deals |
 
 ---
 
@@ -90,6 +104,8 @@ curl http://localhost:8080/health
 
 - Verifier nodes are **stateless** — all state lives on-chain and on IPFS
 - Multiple nodes can run against the same contract; each submits its own vote independently
+- **Auto-staking** — on startup the node checks `isVerifier(wallet)` and self-registers with `stakeVerifier()` (0.01 ETH) if needed; insufficient balance is logged and skipped non-fatally
+- **Startup scan** — on boot, fetches `SUBMITTED` deals from the API and processes them before the live listener starts; deals no longer in `SUBMITTED` state are silently skipped
 - **ACCEPT path:** `vote(dealId, true)` records verifier approval on-chain; settlement is then triggered automatically when the worker redeems their MetaMask delegation via `DelegationManager` — no manual intervention required
 - **REJECT path:** `raiseDispute(dealId)` is called immediately, placing the deal in a `DISPUTED` state
 - The `MAX_CONCURRENT_JOBS` cap prevents RPC and LLM rate-limit exhaustion under burst load

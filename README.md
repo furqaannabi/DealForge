@@ -36,9 +36,9 @@ DealForge provides the missing infrastructure layer for autonomous agent economi
            │ ethers.js                   │ ethers.js
 ┌──────────▼──────────────┐  ┌──────────▼────────────────────┐
 │   DealForge.sol · Base  │  │   Verifier Node  (/verifier)  │
-│  CREATED → ACTIVE →     │  │  ResultSubmitted listener      │
-│  SUBMITTED → SETTLED    │  │  schema / LLM / random verify  │
-│  | REFUNDED | DISPUTED  │  │  on-chain vote submission      │
+│  CREATED → ACTIVE →     │  │  auto-stake · startup scan     │
+│  SUBMITTED → SETTLED    │  │  ResultSubmitted listener      │
+│  | REFUNDED | DISPUTED  │  │  schema / LLM / random verify  │
 └──────────┬──────────────┘  └───────────────────────────────┘
            │
 ┌──────────▼──────────────────────────────────────────────────┐
@@ -72,7 +72,6 @@ DealForge/
 │   │   │   ├── agents.ts       # Agent registry
 │   │   │   └── deals.ts        # On-chain deal mirror + sync
 │   │   └── websocket/relay.ts  # Real-time negotiation relay
-│   ├── docker-compose.yml      # PostgreSQL + Redis infrastructure
 │   ├── .env.example
 │   └── package.json
 ├── contracts/                  # Solidity smart contracts (Foundry)
@@ -89,8 +88,10 @@ DealForge/
 │   └── package.json
 ├── verifier/                   # Independent verification node (TypeScript)
 │   ├── src/
-│   │   ├── index.ts            # Entry point + lifecycle
+│   │   ├── index.ts            # Entry point + startup sequence
 │   │   ├── config.ts           # Zod env config
+│   │   ├── stake.ts            # Auto-stake: registers wallet as verifier on startup
+│   │   ├── scan.ts             # Startup scan: processes existing SUBMITTED deals
 │   │   ├── listener.ts         # ResultSubmitted event listener + concurrency cap
 │   │   ├── vote.ts             # On-chain vote submission (approve / raiseDispute)
 │   │   ├── ipfs.ts             # bytes32 → CIDv0 + IPFS gateway fetch
@@ -103,6 +104,7 @@ DealForge/
 │   │       └── random-sample.ts
 │   ├── Dockerfile
 │   └── package.json
+├── docker-compose.yml          # Full stack: PostgreSQL + Redis + Verifier
 ├── shared/                     # Shared ABI and type definitions
 │   └── abis/
 │       ├── DealForge.abi.json  # Contract ABI
@@ -118,17 +120,29 @@ DealForge/
 ## Quick start
 
 ```bash
+# ── API ──────────────────────────────────────────────
 cd api
 cp .env.example .env
 # Fill in VENICE_INFERENCE_KEY (or GEMINI_API_KEY), PINATA_JWT, PINATA_GATEWAY
-
-# Start Postgres + Redis
-docker compose up -d
 
 # Install deps, apply schema, start with hot reload
 npm install
 npx prisma db push
 npm run dev
+
+# ── Infrastructure (Postgres + Redis) ─────────────────
+# From the repo root — starts both infrastructure services
+docker compose up -d postgres redis
+
+# ── Verifier (optional) ───────────────────────────────
+cd verifier
+cp .env.example .env
+# Fill in RPC_URL, CONTRACT_ADDRESS, PRIVATE_KEY, VENICE_INFERENCE_KEY
+npm install
+npm run dev
+
+# Or run the full stack (infra + verifier) via root docker-compose:
+docker compose up -d
 ```
 
 ---
@@ -219,9 +233,17 @@ Message types: `proposal` · `counter` · `accept` · `reject` · `chat`
 
 ## Verifier node
 
-The `/verifier` directory contains an independent result verification service. Any number of verifier nodes can run alongside the API — they are not part of the coordination API.
+The `/verifier` directory contains an independent result verification service. Any number of verifier nodes can run alongside the API — they operate autonomously and do not share state.
 
-1. Subscribes to the `ResultSubmitted` event on `DealForge.sol`
+**Startup sequence (once, in order):**
+
+1. **Auto-stake** — checks `isVerifier(wallet)` on-chain; calls `stakeVerifier()` with 0.01 ETH if not yet registered
+2. **Startup scan** — queries the Coordination API for all deals already in `SUBMITTED` state and runs the full verification pipeline on each (catches deals submitted before this node started)
+3. **Live listener** — subscribes to `ResultSubmitted` events for all future deals
+
+**Per-deal pipeline:**
+
+1. Re-reads deal state from chain — skips if no longer `SUBMITTED` (another verifier may have acted)
 2. Fetches the task description and result from IPFS (converts on-chain `bytes32` hash → CIDv0)
 3. Routes to the appropriate verification strategy based on the task's `verificationPlan`:
    - **`schema_check`** — validates required fields and minimum record count; optionally spot-checks a random row sample
@@ -264,5 +286,5 @@ Provider is configurable via `LLM_PROVIDER` (`venice` or `gemini`). `LLM_MODEL` 
 | Validation | Zod |
 | Smart contracts | Solidity 0.8.24 + Foundry + OpenZeppelin |
 | Frontend | Next.js 15 + React 19 |
-| Infra | Docker (Postgres + Redis) |
-| Target chain | Base (Ethereum L2) |
+| Infra | Docker (Postgres + Redis + Verifier) |
+| Target chain | Base Sepolia (chain ID 84532) |
