@@ -7,12 +7,10 @@ import {
   DEALFORGE_CHAIN_ID,
   DEALFORGE_CHAIN_NAME,
 } from '@/lib/config';
-import { registerAgent } from '@/lib/api/agents';
 import { attachDealDelegation, listDeals } from '@/lib/api/deals';
 import { createJob } from '@/lib/api/jobs';
 import { commandCatalog, initialTerminalLines, type TerminalLine } from '@/lib/mock-data';
 import type { ApiDelegation } from '@/lib/types/api';
-import { isVerifiedWallet, verifyWalletOwnership } from '@/lib/wallet/auth';
 import { canSignDelegation, signSettlementDelegation } from '@/lib/wallet/delegation';
 
 const DEFAULT_COMMAND = 'summarize this research paper\nbudget 3 USDC\ndeadline 20 minutes';
@@ -22,7 +20,7 @@ type PendingTerminalLine = {
   text: string;
 };
 
-type WalletState = 'disconnected' | 'connected' | 'verifying' | 'verified';
+type WalletState = 'disconnected' | 'connected';
 type DelegationFlowState = {
   jobId: string | null;
   dealId: string | null;
@@ -146,7 +144,6 @@ export function TerminalComposer() {
     return seed ? commandCatalog.filter((item) => item.includes(seed)).slice(0, 4) : commandCatalog;
   }, [input]);
 
-  const isVerified = address ? walletState === 'verified' || isVerifiedWallet(address) : false;
   const wrongChain = isConnected ? chainId !== DEALFORGE_CHAIN_ID : false;
 
   useEffect(() => {
@@ -155,7 +152,7 @@ export function TerminalComposer() {
       return;
     }
 
-    setWalletState(isVerifiedWallet(address) ? 'verified' : 'connected');
+    setWalletState('connected');
   }, [address, isConnected]);
 
   useEffect(() => {
@@ -313,21 +310,6 @@ export function TerminalComposer() {
     setLines((current) => [...current, { id: crypto.randomUUID(), kind, text }]);
   };
 
-  const authenticateWallet = async (walletAddress: string) => {
-    if (!walletClient) {
-      throw new Error('Wallet client unavailable. Reconnect your wallet and try again.');
-    }
-
-    if (isVerifiedWallet(walletAddress)) {
-      setWalletState('verified');
-      return;
-    }
-
-    setWalletState('verifying');
-    await verifyWalletOwnership(walletAddress, walletClient);
-    setWalletState('verified');
-  };
-
   const runCommand = async (raw: string) => {
     const command = raw.trim();
     if (!command || isSubmitting) {
@@ -349,26 +331,6 @@ export function TerminalComposer() {
     setWalletError(null);
 
     try {
-      if (!isVerifiedWallet(address)) {
-        appendLine('agent', 'Verifying wallet ownership with DealForge...');
-        await authenticateWallet(address);
-        enqueueLines([{ kind: 'success', text: 'Wallet verified for DealForge API access.' }]);
-      } else {
-        setWalletState('verified');
-      }
-
-      appendLine('agent', 'Registering your agent profile...');
-      await registerAgent(address.toLowerCase(), {
-        capabilities: ['research', 'summarization', 'data-analysis'],
-        pricing_policy: {
-          min_price_wei: '10000000000000000',
-          max_price_wei: '1000000000000000000',
-          preferred_deadline_hours: 24,
-        },
-        description: 'Task agent controlled from the DealForge workspace.',
-        ens_name: 'task.agent.eth',
-      });
-
       appendLine('agent', 'Posting job to the coordination API...');
       const payload = buildJobPayload(command, attachments);
       const createdJob = await createJob(payload, address.toLowerCase());
@@ -429,14 +391,14 @@ export function TerminalComposer() {
     <section className="panel terminal-panel slide-up">
       <div className="terminal-toolbar">
         <div className="wallet-strip">
-          <div className="wallet-summary">
-            <span className="eyebrow">Wallet</span>
-            <strong>{address ? formatAddress(address) : 'No wallet connected'}</strong>
-          </div>
-          <div className="wallet-status-row">
-            <span className={`pill ${walletState === 'verified' ? 'pill-live' : ''}`}>
-              {walletState === 'verified' ? 'Verified' : walletState === 'connected' ? 'Connected' : walletState === 'verifying' ? 'Verifying' : 'Not connected'}
-            </span>
+        <div className="wallet-summary">
+          <span className="eyebrow">Wallet</span>
+          <strong>{address ? formatAddress(address) : 'No wallet connected'}</strong>
+        </div>
+        <div className="wallet-status-row">
+          <span className={`pill ${walletState === 'connected' ? 'pill-live' : ''}`}>
+            {walletState === 'connected' ? 'Connected' : 'Not connected'}
+          </span>
             <span className={`pill ${wrongChain ? 'pill-warning' : ''}`}>
               {isConnected ? `${DEALFORGE_CHAIN_NAME} ${chainId === DEALFORGE_CHAIN_ID ? 'ready' : `expected ${DEALFORGE_CHAIN_ID}`}` : DEALFORGE_CHAIN_NAME}
             </span>
@@ -518,7 +480,7 @@ export function TerminalComposer() {
         </div>
 
         <div className="form-foot">
-          <span>{isVerified ? 'Wallet verified. You can post and sign from here.' : 'Connect your wallet to post jobs and sign delegation intent.'}</span>
+          <span>{isConnected ? 'Wallet connected. You can post jobs and sign delegation here.' : 'Connect your wallet to post jobs and sign delegation.'}</span>
           <button type="submit" className="button button-primary" disabled={isSubmitting}>
             {isSubmitting ? 'Working...' : 'Run command'}
           </button>
