@@ -4,6 +4,7 @@ import { DealStatus, JobStatus } from '../../generated/prisma/client';
 import { db } from '../db/client';
 import { requireAuth } from '../middleware/auth';
 import { getDealOnChain, syncDealToDb } from '../services/contract';
+import { uploadRawResult } from '../services/ipfs';
 import { config } from '../config';
 
 const router = Router();
@@ -169,6 +170,39 @@ router.post('/', requireAuth, async (req, res) => {
   }
 
   res.status(201).json(deal);
+});
+
+// ─── POST /deals/:dealId/submit-result — Worker uploads result to IPFS ───────
+
+router.post('/:dealId/submit-result', requireAuth, async (req, res) => {
+  const dealId = BigInt(req.params.dealId);
+
+  const deal = await db.deal.findUnique({ where: { dealId } });
+  if (!deal) { res.status(404).json({ error: 'Deal not found — POST /deals first' }); return; }
+  if (deal.worker !== req.agentAddress) {
+    res.status(403).json({ error: 'Only the worker can submit a result' });
+    return;
+  }
+  if (deal.status !== DealStatus.ACTIVE) {
+    res.status(409).json({ error: `Deal is ${deal.status}, expected ACTIVE` });
+    return;
+  }
+
+  const { result } = req.body;
+  if (result === undefined) {
+    res.status(400).json({ error: 'Missing required field: result' });
+    return;
+  }
+
+  try {
+    const upload = await uploadRawResult(dealId, result);
+
+    await db.deal.update({ where: { dealId }, data: { resultCid: upload.cid } });
+
+    res.json({ cid: upload.cid, url: upload.url, size: upload.size });
+  } catch (err) {
+    res.status(502).json({ error: 'Failed to upload result to IPFS', detail: String(err) });
+  }
 });
 
 // ─── POST /deals/:dealId/sync — Re-sync deal state from chain ────────────────
