@@ -273,21 +273,30 @@ export function TerminalComposer() {
       ]);
 
       if (canSignDelegation()) {
-        appendLine('agent', 'Opening your wallet to sign settlement delegation...');
-        const signedDelegation = await signSettlementDelegation(resolvedJobId, address, walletClient);
-
-        if (signedDelegation) {
-          setDelegation(signedDelegation.delegation);
+        if (!walletClient) {
           enqueueLines([
-            { kind: 'success', text: 'Delegation signed in MetaMask.' },
-            `Scoped to settleDeal() on ${formatAddress(DEALFORGE_CONTRACT_ADDRESS)}.`,
-            'Share this signed delegation with the task agent backend to allow autonomous settlement.',
+            { kind: 'error', text: 'Wallet client not loaded. Please try again.' },
+          ]);
+        } else if (!address) {
+          enqueueLines([
+            { kind: 'error', text: 'Wallet address not available. Please reconnect your wallet.' },
           ]);
         } else {
-          enqueueLines([
-            'Delegation signing is not configured yet in this environment.',
-            'Set contract and caveat addresses in the frontend env to enable wallet delegation.',
-          ]);
+          appendLine('agent', 'Opening your wallet to sign settlement delegation...');
+          const signedDelegation = await signSettlementDelegation(resolvedJobId, address, walletClient);
+
+          if (signedDelegation) {
+            setDelegation(signedDelegation.delegation);
+            enqueueLines([
+              { kind: 'success', text: 'Delegation signed in MetaMask.' },
+              `Scoped to settleDeal() on ${formatAddress(DEALFORGE_CONTRACT_ADDRESS)}.`,
+              'Share this signed delegation with the task agent backend to allow autonomous settlement.',
+            ]);
+          } else {
+            enqueueLines([
+              { kind: 'error', text: 'Failed to sign delegation. Please ensure your wallet is connected and try again.' },
+            ]);
+          }
         }
       } else {
         enqueueLines([
