@@ -40,8 +40,18 @@ export function canSignDelegation() {
   return Boolean(DEALFORGE_AGENT_ADDRESS && DEALFORGE_CONTRACT_ADDRESS);
 }
 
+function isValidAddress(address: string): boolean {
+  return /^0x[0-9a-fA-F]{40}$/.test(address);
+}
+
 export async function signSettlementDelegation(jobId: string, userAddress: string, walletClient: WalletClient) {
   if (!canSignDelegation()) {
+    console.warn('Delegation signing not configured');
+    return null;
+  }
+
+  if (!userAddress || !isValidAddress(userAddress)) {
+    console.error(`Invalid user address: ${userAddress}`);
     return null;
   }
 
@@ -63,7 +73,7 @@ export async function signSettlementDelegation(jobId: string, userAddress: strin
   const { signature: _ignoredSignature, ...signableDelegation } = unsignedDelegation;
 
   const signature = await walletClient.signTypedData({
-    account: walletClient.account!,
+    account: userAddress as `0x${string}`,
     domain: {
       name: 'DelegationManager',
       version: '1',
