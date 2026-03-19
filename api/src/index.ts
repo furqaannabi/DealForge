@@ -11,6 +11,7 @@ import jobsRouter from './routes/jobs';
 import agentsRouter from './routes/agents';
 import dealsRouter from './routes/deals';
 import { startEventIndexer, stopEventIndexer } from './services/event-indexer';
+import { fetchByCid } from './services/ipfs';
 
 // ─── Express app ─────────────────────────────────────────────────────────────
 
@@ -42,6 +43,18 @@ app.post('/auth/verify', verifySignature);
 app.use('/jobs', jobsRouter);
 app.use('/agents', agentsRouter);
 app.use('/deals', dealsRouter);
+
+// ─── IPFS proxy — public, no auth required ────────────────────────────────────
+// Verifier and other services call GET /ipfs/:cid instead of hitting Pinata directly.
+
+app.get('/ipfs/:cid', async (req, res) => {
+  try {
+    const data = await fetchByCid(req.params.cid);
+    res.json(data);
+  } catch (err) {
+    res.status(502).json({ error: 'Failed to fetch from IPFS', detail: String(err) });
+  }
+});
 
 // ─── 404 catch-all ───────────────────────────────────────────────────────────
 
