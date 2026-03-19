@@ -6,6 +6,7 @@ import { requireAuth } from '../middleware/auth';
 import { getDealOnChain, syncDealToDb } from '../services/contract';
 import { uploadRawResult } from '../services/ipfs';
 import { config } from '../config';
+import { syncAcceptedProposalDelegation } from '../services/delegation-sync';
 
 const router = Router();
 
@@ -15,6 +16,19 @@ const mirrorDealSchema = z.object({
   deal_id: z.number().int().nonnegative(),
   tx_hash: z.string().regex(/^0x[0-9a-fA-F]{64}$/, 'must be a valid tx hash'),
   job_id: z.string().optional(),
+});
+
+const delegationSchema = z.object({
+  delegate: z.string(),
+  delegator: z.string(),
+  authority: z.string(),
+  caveats: z.array(z.object({
+    enforcer: z.string(),
+    terms: z.string(),
+    args: z.string().optional(),
+  })),
+  salt: z.string(),
+  signature: z.string(),
 });
 
 // ─── GET /deals — List deals (from DB) ───────────────────────────────────────
@@ -169,7 +183,61 @@ router.post('/', requireAuth, async (req, res) => {
     });
   }
 
+  if (job_id) {
+    try {
+      await syncAcceptedProposalDelegation(job_id, dealId.toString());
+    } catch (err) {
+      console.error(`[deals] Failed to sync sub-delegation for mirrored deal #${dealId}:`, err);
+    }
+  }
+
   res.status(201).json(deal);
+});
+
+router.post('/:dealId/delegation', requireAuth, async (req, res) => {
+  const parsed = delegationSchema.safeParse(req.body.delegation);
+  if (!parsed.success) { res.status(400).json({ error: parsed.error.flatten() }); return; }
+
+  const dealId = BigInt(req.params.dealId);
+  const deal = await db.deal.findUnique({
+    where: { dealId },
+    select: { jobId: true, payer: true },
+  });
+
+  if (!deal) {
+    res.status(404).json({ error: 'Deal not found' });
+    return;
+  }
+
+  if (deal.payer !== req.agentAddress) {
+    res.status(403).json({ error: 'Only the payer can attach delegation to this deal' });
+    return;
+  }
+
+  if (!deal.jobId) {
+    res.status(409).json({ error: 'Deal is not linked to a job' });
+    return;
+  }
+
+  await db.job.update({
+    where: { id: deal.jobId },
+    data: { delegationJson: parsed.data } as never,
+  });
+
+  let subDelegation = null;
+  try {
+    const synced = await syncAcceptedProposalDelegation(deal.jobId, dealId.toString());
+    subDelegation = synced?.subDelegation ?? null;
+  } catch (err) {
+    console.error(`[deals] Failed to sync sub-delegation for deal #${dealId}:`, err);
+  }
+
+  res.status(201).json({
+    deal_id: dealId.toString(),
+    job_id: deal.jobId,
+    delegation: parsed.data,
+    sub_delegation: subDelegation,
+  });
 });
 
 // ─── POST /deals/:dealId/submit-result — Worker uploads result to IPFS ───────
@@ -197,7 +265,7 @@ router.post('/:dealId/submit-result', requireAuth, async (req, res) => {
   try {
     const upload = await uploadRawResult(dealId, result);
 
-    await db.deal.update({ where: { dealId }, data: { resultCid: upload.cid } });
+    await db.deal.update({ where: { dealId }, data: { resultCid: upload.cid } as never });
 
     res.json({ cid: upload.cid, url: upload.url, size: upload.size });
   } catch (err) {

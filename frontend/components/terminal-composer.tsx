@@ -1,23 +1,19 @@
 'use client';
 
 import { ChangeEvent, FormEvent, KeyboardEvent, useEffect, useMemo, useRef, useState } from 'react';
-import type { Delegation } from '@metamask/smart-accounts-kit';
 import { ConnectKitButton } from 'connectkit';
 import { useAccount, useChainId, useWalletClient } from 'wagmi';
 import {
   DEALFORGE_CHAIN_ID,
   DEALFORGE_CHAIN_NAME,
-  DEALFORGE_CONTRACT_ADDRESS,
 } from '@/lib/config';
 import { registerAgent } from '@/lib/api/agents';
+import { attachDealDelegation, listDeals } from '@/lib/api/deals';
 import { createJob } from '@/lib/api/jobs';
 import { commandCatalog, initialTerminalLines, type TerminalLine } from '@/lib/mock-data';
-import {
-  canSignDelegation,
-  formatDelegationPreview,
-  signSettlementDelegation,
-} from '@/lib/wallet/delegation';
+import type { ApiDelegation } from '@/lib/types/api';
 import { isVerifiedWallet, verifyWalletOwnership } from '@/lib/wallet/auth';
+import { canSignDelegation, signSettlementDelegation } from '@/lib/wallet/delegation';
 
 const DEFAULT_COMMAND = 'summarize this research paper\nbudget 3 USDC\ndeadline 20 minutes';
 
@@ -27,6 +23,11 @@ type PendingTerminalLine = {
 };
 
 type WalletState = 'disconnected' | 'connected' | 'verifying' | 'verified';
+type DelegationFlowState = {
+  jobId: string | null;
+  dealId: string | null;
+  status: 'idle' | 'waiting_for_deal' | 'signing' | 'attached' | 'error';
+};
 
 function buildResponse(command: string) {
   const normalized = command.toLowerCase();
@@ -130,10 +131,15 @@ export function TerminalComposer() {
   const [walletState, setWalletState] = useState<WalletState>('disconnected');
   const [walletError, setWalletError] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const [lastJobId, setLastJobId] = useState<string | null>(null);
-  const [delegation, setDelegation] = useState<Delegation | null>(null);
-  const [copyState, setCopyState] = useState<'idle' | 'copied'>('idle');
+  const [delegationFlow, setDelegationFlow] = useState<DelegationFlowState>({
+    jobId: null,
+    dealId: null,
+    status: 'idle',
+  });
   const terminalRef = useRef<HTMLDivElement>(null);
+  const announcedDealRef = useRef<string | null>(null);
+  const waitingConfigRef = useRef<string | null>(null);
+  const waitingChainRef = useRef<string | null>(null);
 
   const suggestions = useMemo(() => {
     const seed = input.split('\n')[0].trim().toLowerCase();
@@ -142,7 +148,6 @@ export function TerminalComposer() {
 
   const isVerified = address ? walletState === 'verified' || isVerifiedWallet(address) : false;
   const wrongChain = isConnected ? chainId !== DEALFORGE_CHAIN_ID : false;
-  const delegationPreview = delegation ? formatDelegationPreview(delegation) : '';
 
   useEffect(() => {
     if (!isConnected || !address) {
@@ -158,6 +163,120 @@ export function TerminalComposer() {
       terminalRef.current.scrollTop = terminalRef.current.scrollHeight;
     }
   }, [lines, queuedResponse, activeTypingLine]);
+
+  useEffect(() => {
+    if (!delegationFlow.jobId || delegationFlow.status === 'attached' || delegationFlow.status === 'signing' || !address) {
+      return;
+    }
+
+    let cancelled = false;
+
+    const pollForDealAndSign = async () => {
+      try {
+        const response = await listDeals({ payer: address.toLowerCase(), limit: 20 });
+        if (cancelled) {
+          return;
+        }
+
+        const matchedDeal = response.deals.find((deal) => {
+          const linkedJobId = String(deal.job_id ?? deal.jobId ?? '');
+          return linkedJobId === delegationFlow.jobId;
+        });
+
+        if (!matchedDeal) {
+          return;
+        }
+
+        const rawDealId = matchedDeal.deal_id ?? matchedDeal.dealId;
+        if (rawDealId === undefined || rawDealId === null) {
+          return;
+        }
+
+        const dealId = String(rawDealId);
+        if (announcedDealRef.current !== dealId) {
+          appendLine('agent', `Deal ${dealId} detected for job ${delegationFlow.jobId}.`);
+          announcedDealRef.current = dealId;
+        }
+
+        if (delegationFlow.dealId !== dealId || delegationFlow.status === 'waiting_for_deal') {
+          setDelegationFlow((current) => ({
+            ...current,
+            dealId,
+            status: current.status === 'attached' ? current.status : 'waiting_for_deal',
+          }));
+        }
+
+        if (!canSignDelegation()) {
+          if (waitingConfigRef.current !== dealId) {
+            appendLine('agent', 'Deal mirrored, but delegation signing is not configured in this frontend environment yet.');
+            waitingConfigRef.current = dealId;
+          }
+          return;
+        }
+
+        if (wrongChain) {
+          if (waitingChainRef.current !== dealId) {
+            appendLine('agent', `Switch your wallet to ${DEALFORGE_CHAIN_NAME} to sign settlement delegation for deal ${dealId}.`);
+            waitingChainRef.current = dealId;
+          }
+          return;
+        }
+
+        if (!walletClient) {
+          return;
+        }
+
+        setDelegationFlow((current) => ({ ...current, dealId, status: 'signing' }));
+        appendLine('agent', `Opening your wallet to sign settlement delegation for deal ${dealId}...`);
+
+        const signedDelegation = await signSettlementDelegation(dealId, address, walletClient);
+        if (!signedDelegation) {
+          setDelegationFlow((current) => ({ ...current, dealId, status: 'error' }));
+          return;
+        }
+
+        const attached = await attachDealDelegation(
+          dealId,
+          signedDelegation.delegation as unknown as ApiDelegation,
+          address.toLowerCase(),
+        );
+
+        if (cancelled) {
+          return;
+        }
+
+        setDelegationFlow({
+          jobId: delegationFlow.jobId,
+          dealId,
+          status: 'attached',
+        });
+        enqueueLines([
+          { kind: 'success', text: `Delegation attached to deal ${dealId}.` },
+          attached.sub_delegation
+            ? 'Worker sub-delegation is now ready for automatic redemption after verifier approval.'
+            : 'Parent delegation stored. Worker sub-delegation will be created once proposal acceptance and deal linkage are both present.',
+        ]);
+      } catch (error) {
+        if (cancelled) {
+          return;
+        }
+
+        const message = error instanceof Error ? error.message : 'Unknown delegation error';
+        setDelegationFlow((current) => ({ ...current, status: 'error' }));
+        appendLine('system', `Delegation flow failed: ${message}`);
+      }
+    };
+
+    void pollForDealAndSign();
+    const intervalId = window.setInterval(() => {
+      void pollForDealAndSign();
+    }, 10_000);
+
+    return () => {
+      cancelled = true;
+      window.clearInterval(intervalId);
+    };
+  }, [address, delegationFlow, walletClient, wrongChain]);
 
   useEffect(() => {
     if (activeTypingLine || queuedResponse.length === 0) {
@@ -209,16 +328,6 @@ export function TerminalComposer() {
     setWalletState('verified');
   };
 
-  const copyDelegation = async () => {
-    if (!delegationPreview) {
-      return;
-    }
-
-    await navigator.clipboard.writeText(delegationPreview);
-    setCopyState('copied');
-    window.setTimeout(() => setCopyState('idle'), 1600);
-  };
-
   const runCommand = async (raw: string) => {
     const command = raw.trim();
     if (!command || isSubmitting) {
@@ -264,36 +373,21 @@ export function TerminalComposer() {
       const payload = buildJobPayload(command, attachments);
       const createdJob = await createJob(payload, address.toLowerCase());
       const resolvedJobId = createdJob.id ?? 'pending-id';
-      setLastJobId(resolvedJobId);
       setAttachments([]);
+      announcedDealRef.current = null;
+      waitingConfigRef.current = null;
+      waitingChainRef.current = null;
+      setDelegationFlow({
+        jobId: resolvedJobId,
+        dealId: null,
+        status: 'waiting_for_deal',
+      });
 
       enqueueLines([
         `Job ${resolvedJobId} posted successfully.`,
         `Budget cap set to ${parseBudget(command)} USDC equivalent with ${payload.category} routing.`,
+        'Watching for the mirrored on-chain deal now. Once escrow is linked, the terminal will ask you to sign the parent delegation here.',
       ]);
-
-      if (canSignDelegation()) {
-        appendLine('agent', 'Opening your wallet to sign settlement delegation...');
-        const signedDelegation = await signSettlementDelegation(resolvedJobId, address, walletClient);
-
-        if (signedDelegation) {
-          setDelegation(signedDelegation.delegation);
-          enqueueLines([
-            { kind: 'success', text: 'Delegation signed in MetaMask.' },
-            `Scoped to settleDeal() on ${formatAddress(DEALFORGE_CONTRACT_ADDRESS)}.`,
-            'Share this signed delegation with the task agent backend to allow autonomous settlement.',
-          ]);
-        } else {
-          enqueueLines([
-            'Delegation signing is not configured yet in this environment.',
-            'Set contract and caveat addresses in the frontend env to enable wallet delegation.',
-          ]);
-        }
-      } else {
-        enqueueLines([
-          'Delegation config missing, so the job was posted without autonomous settlement authority.',
-        ]);
-      }
 
       enqueueLines(buildResponse(command));
     } catch (error) {
@@ -431,27 +525,6 @@ export function TerminalComposer() {
         </div>
       </form>
 
-      {delegation ? (
-        <div className="delegation-panel">
-          <div className="delegation-head">
-            <div>
-              <p className="eyebrow">Signed delegation</p>
-              <h2>Autonomous settlement intent</h2>
-            </div>
-            <button type="button" className="button" onClick={() => void copyDelegation()}>
-              {copyState === 'copied' ? 'Copied' : 'Copy JSON'}
-            </button>
-          </div>
-          <p className="delegation-lead">
-            This payload is signed in the browser and scoped for the DealForge settlement contract. Hand it to your backend or agent runner to redeem later.
-          </p>
-          <div className="delegation-meta">
-            <span className="pill pill-live">Job {lastJobId ?? 'pending'}</span>
-            <span className="pill">Chain {DEALFORGE_CHAIN_NAME}</span>
-          </div>
-          <pre className="delegation-code">{delegationPreview}</pre>
-        </div>
-      ) : null}
     </section>
   );
 }

@@ -7,7 +7,7 @@ import { requireEvaluationPayment, requireMatchesPayment } from '../middleware/p
 import { evaluateProposal } from '../services/negotiation-engine';
 import { uploadTaskDescription } from '../services/ipfs';
 import { findMatches } from '../services/matchmaker';
-import { createSubDelegation } from '../services/delegation'; 
+import { syncAcceptedProposalDelegation } from '../services/delegation-sync';
 
 const router = Router();
 
@@ -241,24 +241,16 @@ router.post('/:id/proposals/:pid/evaluate', requireAuth, requireEvaluationPaymen
   // NEW — when accepted, create sub-delegation from parent delegation
   // This is the core novel pattern: negotiation outcome → on-chain permission
   let subDelegation = null;
-  if (evaluation.decision === 'accept' && evaluation.caveat_params) {
+  if (evaluation.decision === 'accept') {
     try {
-      // job.delegationJson is the parent delegation user signed on frontend
-      const parentDelegation = (job as any).delegationJson;
+      const linkedDeal = await db.deal.findUnique({
+        where: { jobId: job.id },
+        select: { dealId: true },
+      });
 
-      if (parentDelegation) {
-        subDelegation = await createSubDelegation({
-          parentDelegation,
-          workerAddress: proposal.workerAddress,
-          dealId: job.id,
-          caveatParams: evaluation.caveat_params,
-        });
-
-        // Store sub-delegation on the proposal so worker agent can fetch + redeem it
-        await db.proposal.update({
-          where: { id: proposal.id },
-          data: { subDelegationJson: subDelegation } as any,
-        });
+      if (linkedDeal) {
+        const synced = await syncAcceptedProposalDelegation(job.id, linkedDeal.dealId.toString());
+        subDelegation = synced?.subDelegation ?? null;
       }
     } catch (err) {
       // Non-fatal — log but don't fail the evaluation response
@@ -288,6 +280,29 @@ router.get('/:id/delegation', requireAuth, async (req, res) => {
   }
 
   res.json({ delegation });
+});
+
+router.get('/:id/proposals/:pid/subdelegation', requireAuth, async (req, res) => {
+  const proposal = await db.proposal.findUnique({
+    where: { id: req.params.pid },
+  }) as ({ id: string; jobId: string; workerAddress: string; subDelegationJson?: unknown } | null);
+
+  if (!proposal || proposal.jobId !== req.params.id) {
+    res.status(404).json({ error: 'Proposal not found' });
+    return;
+  }
+
+  if (proposal.workerAddress !== req.agentAddress) {
+    res.status(403).json({ error: 'Only the selected worker can fetch this sub-delegation' });
+    return;
+  }
+
+  if (!proposal.subDelegationJson) {
+    res.status(404).json({ error: 'No sub-delegation found for this proposal' });
+    return;
+  }
+
+  res.json({ subDelegation: proposal.subDelegationJson });
 });
 
 export default router;
