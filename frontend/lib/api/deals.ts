@@ -1,4 +1,8 @@
-import type { DealsListResponse } from '@/lib/types/api';
+import type {
+  AttachDealDelegationResponse,
+  DealsListResponse,
+  ApiDelegation,
+} from '@/lib/types/api';
 import { apiRequest } from './http';
 
 interface ListDealsParams {
@@ -22,4 +26,18 @@ export async function listDeals(params: ListDealsParams = {}) {
   const path = suffix ? `/deals?${suffix}` : '/deals';
 
   return apiRequest<DealsListResponse>(path);
+}
+
+export async function attachDealDelegation(
+  dealId: number | string,
+  delegation: ApiDelegation,
+  agentAddress: string,
+) {
+  return apiRequest<AttachDealDelegationResponse>(`/deals/${dealId}/delegation`, {
+    method: 'POST',
+    headers: {
+      'x-agent-address': agentAddress,
+    },
+    body: JSON.stringify({ delegation }),
+  });
 }
