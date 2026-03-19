@@ -97,11 +97,16 @@ router.post('/', requireAuth, async (req, res) => {
   const delegationParsed = delegationSchema.safeParse(req.body.delegation);
   const signedDelegation = delegationParsed.success ? delegationParsed.data : null;
 
-  const agentExists = await db.agent.findUnique({ where: { address: req.agentAddress! } });
-  if (!agentExists) {
-    res.status(403).json({ error: 'Agent not registered. POST /agents first.' });
-    return;
-  }
+  await db.agent.upsert({
+    where: { address: req.agentAddress! },
+    update: { lastSeen: new Date() },
+    create: {
+      address: req.agentAddress!,
+      capabilities: [],
+      pricingPolicy: {},
+      description: '',
+    },
+  });
 
   const { title, description, max_budget, deadline, category } = parsed.data;
 
