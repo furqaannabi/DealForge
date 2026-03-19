@@ -40,7 +40,7 @@ function encodeDelegation(delegation: Delegation): string {
         delegate:  delegation.delegate,
         delegator: delegation.delegator,
         authority: delegation.authority,
-        caveats:   delegation.caveats.map(c => ({
+        caveats:   delegation.caveats.map((c: any) => ({
           enforcer: c.enforcer,
           terms:    c.terms,
           args: c.args ?? '0x',
