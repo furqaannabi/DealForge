@@ -53,7 +53,7 @@ export async function processSubmittedDeal(
     const task = await fetchTask(taskHashHex);
 
     console.log(`[listener] Fetching result from IPFS (${resultHashHex})`);
-    const result = await fetchResult(resultHashHex);
+    const result = await fetchResult(resultHashHex, dealId);
 
     // ── 3. Run verification ───────────────────────────────────────────────────
     console.log(`[listener] Running verification for deal #${dealId} (type: ${task.verificationPlan?.type ?? 'llm_judge'})`);

@@ -22,6 +22,8 @@ const envSchema = z.object({
 
   // IPFS
   IPFS_GATEWAY: z.string().url().default('https://gateway.pinata.cloud'),
+  PINATA_JWT: z.string().min(1).optional(),
+  PINATA_GATEWAY: z.string().optional(), // e.g. your-subdomain.mypinata.cloud
 
   // LLM (OpenAI-compatible)
   LLM_PROVIDER: z.enum(['venice', 'gemini']).default(DEFAULT_LLM_PROVIDER),
