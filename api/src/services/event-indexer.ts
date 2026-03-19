@@ -47,9 +47,10 @@ async function onDealCreated(
   amount: bigint,
   _deadline: bigint,
   _taskHash: string,
-  event: ethers.EventLog,
+  event: ethers.ContractEventPayload,
 ): Promise<void> {
   const id = dealId(rawId);
+  const txHash = event.log.transactionHash;
   console.log(`[indexer] DealCreated #${id} payer=${payer} worker=${worker}`);
   try {
     await db.deal.upsert({
@@ -61,12 +62,12 @@ async function onDealCreated(
         worker: worker.toLowerCase(),
         amount: amount.toString(),
         status: DealStatus.CREATED,
-        txHash: event.transactionHash,
+        txHash,
       },
       update: {
         // If it was already mirrored via POST /deals, just confirm status
         status: DealStatus.CREATED,
-        txHash: event.transactionHash,
+        txHash,
       },
     });
   } catch (err) {

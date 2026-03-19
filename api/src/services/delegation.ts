@@ -11,7 +11,7 @@ import { config } from '../config';
 import type { CaveatParams } from '../types';
 
 const DEALFORGE_INTERFACE = new ethers.Interface([
-  'function settleDeal(uint256 dealId) nonpayable',
+  'function settleDeal(uint256 dealId)',
 ]);
 
 function getDelegationChainId(): 8453 | 84532 {

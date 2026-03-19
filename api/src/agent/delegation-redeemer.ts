@@ -17,7 +17,7 @@ const DELEGATION_MANAGER_ABI = [
 // Only settleDeal — we need this to encode the action calldata
 
 const DEALFORGE_ABI = [
-  'function settleDeal(uint256 dealId) nonpayable',
+  'function settleDeal(uint256 dealId)',
 ];
 
 function getRpcUrl(): string {
