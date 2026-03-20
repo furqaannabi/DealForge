@@ -403,6 +403,11 @@ export const DEALFORGE_ABI = [
         "name": "resultHash",
         "type": "bytes32",
         "internalType": "bytes32"
+      },
+      {
+        "name": "resultCid",
+        "type": "string",
+        "internalType": "string"
       }
     ],
     "outputs": [],
@@ -619,6 +624,12 @@ export const DEALFORGE_ABI = [
         "internalType": "bytes32"
       },
       {
+        "name": "resultCid",
+        "type": "string",
+        "indexed": false,
+        "internalType": "string"
+      },
+      {
         "name": "submittedAt",
         "type": "uint256",
         "indexed": false,
@@ -680,5 +691,5 @@ export const DEALFORGE_ABI = [
   }
 ] as const;
 
-export const DEALFORGE_ADDRESS_BASE_SEPOLIA = "0x53deecda58f1abdd294c5b1302f86cbd912f2f22" as `0x${string}`;
+export const DEALFORGE_ADDRESS_BASE_SEPOLIA = "0x4C1a069458467fb2d73D47B4dBf49bEb9291af5C" as `0x${string}`;
 export const DEALFORGE_ADDRESS_BASE_MAINNET = "0x0000000000000000000000000000000000000000" as `0x${string}`;

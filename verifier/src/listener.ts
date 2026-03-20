@@ -12,7 +12,7 @@ import { stats } from './health';
 
 const ABI = [
   'function getDeal(uint256 dealId) view returns (tuple(uint256 id, address payer, address worker, address token, uint256 amount, uint256 deadline, bytes32 taskHash, bytes32 resultHash, uint8 status, uint256 createdAt, uint256 submittedAt))',
-  'event ResultSubmitted(uint256 indexed dealId, bytes32 resultHash, uint256 submittedAt)',
+  'event ResultSubmitted(uint256 indexed dealId, bytes32 resultHash, string resultCid, uint256 submittedAt)',
   'event DealCreated(uint256 indexed dealId, address indexed payer, address indexed worker, address token, uint256 amount, uint256 deadline, bytes32 taskHash)',
   'event DisputeRaised(uint256 indexed dealId, address initiator, uint256 raisedAt)',
 ];

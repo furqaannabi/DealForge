@@ -85,11 +85,17 @@ async function onDealAccepted(rawId: bigint): Promise<void> {
   }
 }
 
-async function onResultSubmitted(rawId: bigint): Promise<void> {
+async function onResultSubmitted(rawId: bigint, _resultHash: string, resultCid: string): Promise<void> {
   const id = dealId(rawId);
-  console.log(`[indexer] ResultSubmitted #${id}`);
+  console.log(`[indexer] ResultSubmitted #${id} cid=${resultCid}`);
   try {
-    await updateDealStatus(id, DealStatus.SUBMITTED);
+    await db.deal.updateMany({
+      where: { dealId: id },
+      data: {
+        status: DealStatus.SUBMITTED,
+        ...(resultCid ? { resultCid } : {}),
+      },
+    });
   } catch (err) {
     console.error(`[indexer] ResultSubmitted #${id} error:`, err);
   }
