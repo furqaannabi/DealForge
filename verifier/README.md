@@ -66,7 +66,6 @@ The image exposes port `8080` and includes a `HEALTHCHECK` against `/health`.
 |---|---|---|
 | `RPC_URL` | Yes | Base Sepolia HTTP RPC (default: `https://sepolia.base.org`) |
 | `WS_RPC_URL` | Yes | Base Sepolia WebSocket RPC — **must be `wss://`**; prevents Alchemy filter expiry |
-| `CONTRACT_ADDRESS` | Yes | Deployed `DealForge.sol` address |
 | `PRIVATE_KEY` | Yes | Funded 32-byte hex private key for submitting on-chain votes |
 | `API_BASE_URL` | Yes | Coordination API base URL — used for IPFS CID resolution and startup scan |
 | `GEMINI_API_KEY` | Yes | Gemini API key — **always required** for live web search grounding in `llm_judge` |
