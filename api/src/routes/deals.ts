@@ -6,7 +6,6 @@ import { requireAuth } from '../middleware/auth';
 import { getDealOnChain, syncDealToDb } from '../services/contract';
 import { uploadRawResult } from '../services/ipfs';
 import { config } from '../config';
-import { syncAcceptedProposalDelegation } from '../services/delegation-sync';
 
 const router = Router();
 
@@ -189,14 +188,6 @@ router.post('/', requireAuth, async (req, res) => {
     });
   }
 
-  if (job_id) {
-    try {
-      await syncAcceptedProposalDelegation(job_id, dealId.toString());
-    } catch (err) {
-      console.error(`[deals] Failed to sync sub-delegation for mirrored deal #${dealId}:`, err);
-    }
-  }
-
   res.status(201).json(deal);
 });
 
@@ -214,7 +205,7 @@ router.patch('/:dealId', requireAuth, async (req, res) => {
   const { task_cid } = req.body as { task_cid?: string };
   if (!task_cid) { res.status(400).json({ error: 'Nothing to update' }); return; }
 
-  const updated = await db.deal.update({ where: { dealId }, data: { taskCid: task_cid } });
+  const updated = await db.deal.update({ where: { dealId }, data: { taskCid: task_cid } as never });
   res.json(updated);
 });
 
@@ -248,19 +239,10 @@ router.post('/:dealId/delegation', requireAuth, async (req, res) => {
     data: { delegationJson: parsed.data } as never,
   });
 
-  let subDelegation = null;
-  try {
-    const synced = await syncAcceptedProposalDelegation(deal.jobId, dealId.toString());
-    subDelegation = synced?.subDelegation ?? null;
-  } catch (err) {
-    console.error(`[deals] Failed to sync sub-delegation for deal #${dealId}:`, err);
-  }
-
   res.status(201).json({
     deal_id: dealId.toString(),
     job_id: deal.jobId,
     delegation: parsed.data,
-    sub_delegation: subDelegation,
   });
 });
 

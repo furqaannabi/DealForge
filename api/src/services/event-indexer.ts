@@ -8,8 +8,7 @@
 import { ethers } from 'ethers';
 import { config } from '../config';
 import { db } from '../db/client';
-import { DealStatus, JobStatus, ProposalStatus } from '../../generated/prisma/client';
-import { redeemDelegation } from '../agent/delegation-redeemer';
+import { DealStatus, JobStatus } from '../../generated/prisma/client';
 import { getContractForEvents } from './contract';
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -152,48 +151,7 @@ async function onDisputeResolved(rawId: bigint, paidWorker: boolean): Promise<vo
 
 async function onVerifierApprovalRecorded(rawId: bigint): Promise<void> {
   const id = dealId(rawId);
-  console.log(`[indexer] VerifierApprovalRecorded #${id} — attempting delegation redemption`);
-
-  try {
-    const mirroredDeal = await db.deal.findUnique({
-      where: { dealId: id },
-      select: { jobId: true, worker: true },
-    });
-
-    if (!mirroredDeal?.jobId) {
-      console.warn(`[indexer] VerifierApprovalRecorded #${id} skipped: no linked job found in DB mirror`);
-      return;
-    }
-
-    const acceptedProposal = await db.proposal.findFirst({
-      where: {
-        jobId: mirroredDeal.jobId,
-        status: ProposalStatus.accepted,
-      },
-      orderBy: { updatedAt: 'desc' },
-      select: {
-        id: true,
-        workerAddress: true,
-      },
-    });
-
-    if (!acceptedProposal) {
-      console.warn(`[indexer] VerifierApprovalRecorded #${id} skipped: no accepted proposal found for job ${mirroredDeal.jobId}`);
-      return;
-    }
-
-    const workerAddress = acceptedProposal.workerAddress || mirroredDeal.worker;
-    const txHash = await redeemDelegation(
-      id.toString(),
-      mirroredDeal.jobId,
-      acceptedProposal.id,
-      workerAddress,
-    );
-
-    console.log(`[indexer] Delegation redeemed for deal #${id}. tx: ${txHash}`);
-  } catch (err) {
-    console.error(`[indexer] Delegation redemption failed for deal #${id}:`, err);
-  }
+  console.log(`[indexer] VerifierApprovalRecorded #${id}`);
 }
 
 

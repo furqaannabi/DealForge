@@ -118,7 +118,6 @@ export interface AttachDealDelegationResponse {
   deal_id: string;
   job_id: string;
   delegation: ApiDelegation;
-  sub_delegation: ApiDelegation | null;
 }
 
 export interface CreateJobRequest {
