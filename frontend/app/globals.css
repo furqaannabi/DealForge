@@ -712,6 +712,36 @@ textarea {
   line-height: 1.55;
 }
 
+.modal-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 50;
+  padding: 28px;
+  display: grid;
+  place-items: center;
+  background: rgba(0, 0, 0, 0.58);
+  backdrop-filter: blur(10px);
+}
+
+.modal-panel {
+  width: min(760px, 100%);
+  max-height: min(80vh, 820px);
+  padding: 20px;
+  display: grid;
+  gap: 14px;
+}
+
+.result-code {
+  max-height: min(56vh, 620px);
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.result-state,
+.result-cid {
+  color: var(--muted);
+}
+
 .deal-summary-bar {
   padding: 14px 18px;
   display: flex;
@@ -747,6 +777,13 @@ textarea {
 
 .deal-card-minimal {
   padding: 18px 20px;
+}
+
+.deal-actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
 }
 
 .meta-grid {

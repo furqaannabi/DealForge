@@ -55,6 +55,8 @@ export interface ApiDeal {
   job_id?: string | null;
   taskCid?: string | null;
   task_cid?: string | null;
+  resultCid?: string | null;
+  result_cid?: string | null;
   payer: string;
   worker: string;
   amount: string;
