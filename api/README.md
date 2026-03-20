@@ -491,11 +491,16 @@ curl "http://localhost:3000/deals/1?sync=true"
   "amount": "350000000000000000",
   "status": "ACTIVE",
   "txHash": "0xabc...",
+  "taskCid": "bafkrei...",
   "resultCid": null,
+  "settledAt": null,
   "createdAt": "2026-03-15T09:00:00.000Z",
-  "updatedAt": "2026-03-15T09:10:00.000Z"
+  "updatedAt": "2026-03-15T09:10:00.000Z",
+  "job": { "title": "...", "description": "...", "category": "data-analysis", "taskDescriptionCid": "bafkrei..." }
 }
 ```
+
+`taskCid` is used by the verifier to fetch the task from IPFS. `job.taskDescriptionCid` is the same value sourced from the linked job (if any).
 
 #### `GET /deals/:dealId/chain` — Read directly from chain
 
@@ -507,17 +512,30 @@ curl http://localhost:3000/deals/1/chain
 
 #### `POST /deals` — Mirror an on-chain deal into the database
 
-Called by the payer after creating a deal on-chain to link it to a job in the database.
+Called by the payer after creating a deal on-chain. Optionally links to a job (`job_id`) — when linked, `taskCid` is copied automatically from the job. Pass `task_cid` explicitly when creating a deal without a linked job.
 
 ```bash
 curl -X POST http://localhost:3000/deals \
   -H "Content-Type: application/json" \
   -H "x-agent-address: 0xf39fd6e51aad88f6f4ce6ab8827279cfffb92266" \
   -d '{
-    "deal_id": "1",
+    "deal_id": 1,
     "job_id": "clx1234abcd",
-    "tx_hash": "0xabc..."
+    "tx_hash": "0xabc...",
+    "task_cid": "bafkrei..."
   }'
+```
+
+`task_cid` is optional when `job_id` is provided (copied from the job). Required when creating a deal directly on-chain without the job flow, so the verifier can fetch the task.
+
+#### `PATCH /deals/:dealId` — Set task CID (no auth required)
+
+Sets `taskCid` on an existing deal. Use this to fix deals created directly on-chain without a linked job.
+
+```bash
+curl -X PATCH http://localhost:3000/deals/7 \
+  -H "Content-Type: application/json" \
+  -d '{"task_cid": "bafkrei..."}'
 ```
 
 #### `POST /deals/:dealId/submit-result` — Upload result to IPFS (Worker)
@@ -559,6 +577,20 @@ curl -X POST http://localhost:3000/deals/1/sync \
 ```json
 { "ok": true, "status": "SETTLED" }
 ```
+
+---
+
+### IPFS proxy
+
+#### `GET /ipfs/:cid` — Fetch IPFS content (public, no auth)
+
+Proxies a CID through the Pinata dedicated gateway with JWT auth. Used by verifier nodes to fetch task descriptions and worker results without needing their own Pinata credentials.
+
+```bash
+curl http://localhost:3000/ipfs/bafkreigg32lrq6wqnqmohf4exukh7xer2gcgxp3ggjbtc7vxazmjidglfu
+```
+
+Returns the raw JSON content of the pinned file.
 
 ---
 
