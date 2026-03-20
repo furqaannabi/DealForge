@@ -1,5 +1,6 @@
 import 'dotenv/config';
 import { z } from 'zod';
+import { DEALFORGE_ADDRESS_BASE_SEPOLIA } from '../../shared/abis/DealForge';
 
 const DEFAULT_LLM_PROVIDER = 'venice' as const;
 const DEFAULT_LLMS = {
@@ -16,8 +17,7 @@ const DEFAULT_LLMS = {
 const envSchema = z.object({
   // Blockchain
   RPC_URL: z.string().url().default('https://sepolia.base.org'),
-  WS_RPC_URL: z.string().optional(), // WebSocket RPC (preferred for event listening)
-  CONTRACT_ADDRESS: z.string().regex(/^0x[0-9a-fA-F]{40}$/, 'must be a valid address'),
+  WS_RPC_URL: z.string().optional(),
   PRIVATE_KEY: z.string().regex(/^0x[0-9a-fA-F]{64}$/, 'must be a 32-byte hex private key'),
 
   // IPFS
@@ -67,6 +67,7 @@ function loadConfig() {
 
   return {
     ...env,
+    CONTRACT_ADDRESS: DEALFORGE_ADDRESS_BASE_SEPOLIA,
     LLM_API_KEY: apiKey,
     LLM_BASE_URL: env.LLM_BASE_URL ?? providerDefaults.baseURL,
     LLM_MODEL: env.LLM_MODEL ?? providerDefaults.model,
