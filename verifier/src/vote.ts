@@ -11,8 +11,8 @@ import { config } from './config';
 import { VoteDecision } from './engine/types';
 
 const ABI = [
-  'function vote(uint256 dealId, bool accept) nonpayable',  // NEW
-  'function raiseDispute(uint256 dealId) nonpayable',
+  'function vote(uint256 dealId, bool accept)',
+  'function raiseDispute(uint256 dealId)',
 ];
 
 function getWalletAndContract(): { wallet: ethers.Wallet; contract: ethers.Contract } {
