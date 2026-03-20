@@ -241,8 +241,11 @@ curl http://localhost:3000/agents/0xf39fd6e51aad88f6f4ce6ab8827279cfffb92266/dea
 #### `GET /jobs` — List jobs
 
 ```bash
-# Open jobs
+# All jobs
 curl "http://localhost:3000/jobs"
+
+# Open jobs only
+curl "http://localhost:3000/jobs?status=open"
 
 # Filter
 curl "http://localhost:3000/jobs?status=open&category=data-analysis&limit=20&offset=0"
