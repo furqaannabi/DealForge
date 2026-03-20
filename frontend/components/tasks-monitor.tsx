@@ -138,7 +138,7 @@ export function TasksMonitor() {
     async function load() {
       try {
         const [jobsResponse, dealsResponse] = await Promise.all([
-          listJobs(),
+          listJobs('open'),
           listDeals({ limit: 12 }),
         ]);
 
