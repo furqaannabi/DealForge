@@ -1,4 +1,3 @@
-import { ethers } from 'ethers';
 import {
   Implementation,
   ROOT_AUTHORITY,
@@ -10,20 +9,14 @@ import {
 import type { ApiDelegation } from '@/lib/types/api';
 import { createPublicClient, createWalletClient, custom, getAddress, http } from 'viem';
 import { base, baseSepolia } from 'viem/chains';
-import {
-  DEALFORGE_AGENT_ADDRESS,
-  DEALFORGE_CHAIN_ID,
-  DEALFORGE_CONTRACT_ADDRESS,
-} from '@/lib/config';
-
-const DEALFORGE_INTERFACE = new ethers.Interface(['function settleDeal(uint256 dealId)']);
+import { DEALFORGE_AGENT_ADDRESS, DEALFORGE_CHAIN_ID } from '@/lib/config';
 
 type Eip1193Provider = {
   request(args: { method: string; params?: unknown[] | object }): Promise<unknown>;
 };
 
 export function canSignDelegation() {
-  return Boolean(DEALFORGE_AGENT_ADDRESS && DEALFORGE_CONTRACT_ADDRESS);
+  return Boolean(DEALFORGE_AGENT_ADDRESS);
 }
 
 function getActiveChain() {
@@ -67,7 +60,13 @@ function serializeDelegation(delegation: Delegation): ApiDelegation {
   };
 }
 
-export async function signSettlementDelegation(userAddress: string) {
+export async function signEscrowFundingDelegation({
+  userAddress,
+  maxAmountWei,
+}: {
+  userAddress: string;
+  maxAmountWei: bigint;
+}) {
   if (!canSignDelegation()) {
     return null;
   }
@@ -99,15 +98,16 @@ export async function signSettlementDelegation(userAddress: string) {
     deploySalt: '0x',
   } as never);
 
+  const environment = getSmartAccountsEnvironment(DEALFORGE_CHAIN_ID);
+
   const delegation = createDelegation({
-    environment: getSmartAccountsEnvironment(DEALFORGE_CHAIN_ID),
+    environment,
     from: smartAccount.address,
     to: DEALFORGE_AGENT_ADDRESS as `0x${string}`,
     parentDelegation: ROOT_AUTHORITY,
     scope: {
-      type: 'functionCall',
-      targets: [DEALFORGE_CONTRACT_ADDRESS as `0x${string}`],
-      selectors: [DEALFORGE_INTERFACE.getFunction('settleDeal')!.selector as `0x${string}`],
+      type: 'nativeTokenTransferAmount',
+      maxAmount: maxAmountWei,
     },
   });
 
@@ -121,6 +121,7 @@ export async function signSettlementDelegation(userAddress: string) {
     delegation: serializeDelegation(signedDelegation),
     delegationManagerAddress: smartAccount.environment.DelegationManager,
     smartAccountAddress: smartAccount.address,
+    maxAmountWei: maxAmountWei.toString(),
   };
 }
 

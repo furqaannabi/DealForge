@@ -7,7 +7,6 @@ import { requireEvaluationPayment, requireMatchesPayment } from '../middleware/p
 import { evaluateProposal } from '../services/negotiation-engine';
 import { uploadTaskDescription } from '../services/ipfs';
 import { findMatches } from '../services/matchmaker';
-import { syncAcceptedProposalDelegation } from '../services/delegation-sync';
 
 const router = Router();
 
@@ -28,7 +27,9 @@ const proposalSchema = z.object({
   message: z.string().min(1).max(2000),
 });
 
-// NEW — frontend sends signed delegation when posting a job
+// Optional MetaMask delegation signed on the frontend.
+// This is stored with the job so the task agent can later reference it when
+// calling DelegationManager.redeemDelegations() around createDeal().
 const delegationSchema = z.object({
   delegate: z.string(),
   delegator: z.string(),
@@ -86,14 +87,12 @@ router.get('/:id', async (req, res) => {
   res.json({ ...job, proposal_count: job._count.proposals });
 });
 
-// ─── POST /jobs —  now also accepts + stores signed delegation ────────
+// ─── POST /jobs — optionally stores a signed funding delegation ────────
 
 router.post('/', requireAuth, async (req, res) => {
   const parsed = postJobSchema.safeParse(req.body);
   if (!parsed.success) { res.status(400).json({ error: parsed.error.flatten() }); return; }
 
-  // NEW — delegation is optional here (user signs it on frontend)
-  // If provided, we store it alongside the job
   const delegationParsed = delegationSchema.safeParse(req.body.delegation);
   const signedDelegation = delegationParsed.success ? delegationParsed.data : null;
 
@@ -113,8 +112,6 @@ router.post('/', requireAuth, async (req, res) => {
       maxBudget: max_budget,
       deadline: BigInt(deadline),
       category,
-      // NEW — store the raw signed delegation JSON from user's MetaMask
-      // Add delegationJson Json? to your Prisma schema on the Job model
       ...(signedDelegation ? { delegationJson: signedDelegation } : {}),
     },
   });
@@ -203,7 +200,6 @@ router.post('/:id/proposals', requireAuth, async (req, res) => {
 });
 
 // ─── POST /jobs/:id/proposals/:pid/evaluate  ───────────────────────
-// Only change: when decision is "accept", also create sub-delegation
 
 router.post('/:id/proposals/:pid/evaluate', requireAuth, requireEvaluationPayment, async (req, res) => {
   const [job, proposal] = await Promise.all([
@@ -238,36 +234,11 @@ router.post('/:id/proposals/:pid/evaluate', requireAuth, requireEvaluationPaymen
     }
   });
 
-  // NEW — when accepted, create sub-delegation from parent delegation
-  // This is the core novel pattern: negotiation outcome → on-chain permission
-  let subDelegation = null;
-  if (evaluation.decision === 'accept') {
-    try {
-      const linkedDeal = await db.deal.findUnique({
-        where: { jobId: job.id },
-        select: { dealId: true },
-      });
-
-      if (linkedDeal) {
-        const synced = await syncAcceptedProposalDelegation(job.id, linkedDeal.dealId.toString());
-        subDelegation = synced?.subDelegation ?? null;
-      }
-    } catch (err) {
-      // Non-fatal — log but don't fail the evaluation response
-      // Worker can still be paid via manual settleDeal fallback
-      console.error('[evaluate] Sub-delegation creation failed:', err);
-    }
-  }
-
-  res.json({
-    ...evaluation,
-    // Return sub-delegation to worker agent so it knows it can redeem
-    sub_delegation: subDelegation,
-  });
+  res.json(evaluation);
 });
 
-// ─── NEW: GET /jobs/:id/delegation — worker fetches parent delegation ────────
-// Worker agent calls this to get the delegation before redeeming
+// ─── GET /jobs/:id/delegation — fetch stored funding delegation ────────
+// The task agent uses this when preparing DelegationManager.redeemDelegations().
 
 router.get('/:id/delegation', requireAuth, async (req, res) => {
   const job = await db.job.findUnique({ where: { id: req.params.id } });
@@ -280,29 +251,6 @@ router.get('/:id/delegation', requireAuth, async (req, res) => {
   }
 
   res.json({ delegation });
-});
-
-router.get('/:id/proposals/:pid/subdelegation', requireAuth, async (req, res) => {
-  const proposal = await db.proposal.findUnique({
-    where: { id: req.params.pid },
-  }) as ({ id: string; jobId: string; workerAddress: string; subDelegationJson?: unknown } | null);
-
-  if (!proposal || proposal.jobId !== req.params.id) {
-    res.status(404).json({ error: 'Proposal not found' });
-    return;
-  }
-
-  if (proposal.workerAddress !== req.agentAddress) {
-    res.status(403).json({ error: 'Only the selected worker can fetch this sub-delegation' });
-    return;
-  }
-
-  if (!proposal.subDelegationJson) {
-    res.status(404).json({ error: 'No sub-delegation found for this proposal' });
-    return;
-  }
-
-  res.json({ subDelegation: proposal.subDelegationJson });
 });
 
 export default router;

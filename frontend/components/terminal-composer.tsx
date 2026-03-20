@@ -10,7 +10,7 @@ import {
 } from '@/lib/config';
 import { createJob } from '@/lib/api/jobs';
 import { commandCatalog, initialTerminalLines, type TerminalLine } from '@/lib/mock-data';
-import { canSignDelegation, signSettlementDelegation } from '@/lib/wallet/delegation';
+import { canSignDelegation, signEscrowFundingDelegation } from '@/lib/wallet/delegation';
 
 const DEFAULT_COMMAND = 'summarize this research paper\nbudget 3 USDC\ndeadline 20 minutes';
 
@@ -212,23 +212,29 @@ export function TerminalComposer() {
 
     try {
       let signedDelegation = null;
+      const payload = buildJobPayload(command, attachments);
       if (!connectedAsTaskAgent && canSignDelegation()) {
         if (wrongChain) {
           throw new Error(`Switch your wallet to ${DEALFORGE_CHAIN_NAME} before posting this job.`);
         }
 
-        appendLine('agent', `Opening your wallet to authorize task agent ${formatAddress(DEALFORGE_AGENT_ADDRESS)}...`);
-        signedDelegation = await signSettlementDelegation(address);
+        appendLine(
+          'agent',
+          `Opening your wallet to authorize task agent ${formatAddress(DEALFORGE_AGENT_ADDRESS)} to spend up to ${payload.max_budget} wei through DelegationManager...`,
+        );
+        signedDelegation = await signEscrowFundingDelegation({
+          userAddress: address,
+          maxAmountWei: BigInt(payload.max_budget),
+        });
         if (!signedDelegation) {
           throw new Error('Delegation signing is not configured in this frontend environment.');
         }
         enqueueLines([
-          { kind: 'success', text: 'Parent delegation signed by the connected wallet.' },
+          { kind: 'success', text: 'Budget delegation signed by the connected wallet.' },
         ]);
       }
 
       appendLine('agent', `Posting job through task agent ${formatAddress(DEALFORGE_AGENT_ADDRESS)}...`);
-      const payload = buildJobPayload(command, attachments);
       const createdJob = await createJob(
         {
           ...payload,
@@ -242,8 +248,8 @@ export function TerminalComposer() {
         `Job ${resolvedJobId} posted successfully.`,
         `Budget cap set to ${parseBudget(command)} USDC equivalent with ${payload.category} routing.`,
         signedDelegation
-          ? 'The parent delegation is stored with the job. Once the deal is linked and a worker is accepted, the backend can mint the worker sub-delegation.'
-          : 'Job posted without a parent delegation because delegation signing is not configured here.',
+          ? 'The signed budget delegation is stored with the job so the task agent can later call DelegationManager and lock escrow through the existing createDeal() flow.'
+          : 'Job posted without a MetaMask budget delegation because delegation signing is not configured here.',
       ]);
 
       enqueueLines(buildResponse(command));
@@ -377,8 +383,8 @@ export function TerminalComposer() {
         <div className="form-foot">
           <span>
             {isConnected
-              ? 'Wallet connected. Posting uses the task agent; your wallet signs the parent delegation.'
-              : 'Connect your wallet to post jobs and sign delegation.'}
+              ? 'Wallet connected. Posting uses the task agent; your wallet signs a one-time spend cap for the agent wallet.'
+              : 'Connect your wallet to post jobs and sign an escrow funding delegation.'}
           </span>
           <button type="submit" className="button button-primary" disabled={isSubmitting}>
             {isSubmitting ? 'Working...' : 'Run command'}
