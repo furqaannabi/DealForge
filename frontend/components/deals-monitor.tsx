@@ -3,9 +3,13 @@
 import { useEffect, useState } from 'react';
 import { listDeals } from '@/lib/api/deals';
 import { listJobs } from '@/lib/api/jobs';
-import { fetchIpfsTaskTitle } from '@/lib/ipfs';
+import { fetchIpfsContent, fetchIpfsTaskTitle } from '@/lib/ipfs';
 import type { DealCardData } from '@/lib/mock-data';
 import type { ApiDeal, ApiJob } from '@/lib/types/api';
+
+type DealMonitorItem = DealCardData & {
+  resultCid?: string | null;
+};
 
 const STATUS_DETAILS: Record<DealCardData['status'], { progress: number; confirmation: DealCardData['confirmation'] }> = {
   NEGOTIATING: { progress: 20, confirmation: 'Pending' },
@@ -65,7 +69,6 @@ async function resolveDealTaskTitle(deal: ApiDeal, jobsById: Map<string, ApiJob>
   if (taskCid) {
     try {
       const title = await fetchIpfsTaskTitle(taskCid);
-      console.log(title)
       if (title) {
         return title;
       }
@@ -77,7 +80,7 @@ async function resolveDealTaskTitle(deal: ApiDeal, jobsById: Map<string, ApiJob>
   return 'Task title unavailable';
 }
 
-async function mapApiDeal(deal: ApiDeal, jobsById: Map<string, ApiJob>): Promise<DealCardData> {
+async function mapApiDeal(deal: ApiDeal, jobsById: Map<string, ApiJob>): Promise<DealMonitorItem> {
   const status =
     deal.status === 'CREATED'
       ? 'NEGOTIATING'
@@ -101,6 +104,7 @@ async function mapApiDeal(deal: ApiDeal, jobsById: Map<string, ApiJob>): Promise
     status,
     deadline: displayDate,
     txHash,
+    resultCid: deal.result_cid ?? deal.resultCid ?? null,
     progress: statusDetails.progress,
     confirmation: statusDetails.confirmation,
     timeline: [
@@ -117,9 +121,16 @@ async function mapApiDeal(deal: ApiDeal, jobsById: Map<string, ApiJob>): Promise
 }
 
 export function DealsMonitor() {
-  const [items, setItems] = useState<DealCardData[]>([]);
+  const [items, setItems] = useState<DealMonitorItem[]>([]);
   const [source, setSource] = useState<'api' | 'empty' | 'error' | 'loading'>('loading');
   const [copiedWorkerId, setCopiedWorkerId] = useState<number | null>(null);
+  const [selectedResult, setSelectedResult] = useState<{
+    dealId: number;
+    cid: string;
+    content: string;
+    isJson: boolean;
+  } | null>(null);
+  const [resultState, setResultState] = useState<'idle' | 'loading' | 'error'>('idle');
 
   async function copyWorkerAddress(id: number, address: string) {
     try {
@@ -128,6 +139,33 @@ export function DealsMonitor() {
       setTimeout(() => setCopiedWorkerId((current) => (current === id ? null : current)), 1200);
     } catch {
       setCopiedWorkerId(null);
+    }
+  }
+
+  async function openResultModal(deal: DealMonitorItem) {
+    if (!deal.resultCid) {
+      return;
+    }
+
+    setResultState('loading');
+    setSelectedResult({
+      dealId: deal.id,
+      cid: deal.resultCid,
+      content: '',
+      isJson: false,
+    });
+
+    try {
+      const response = await fetchIpfsContent(deal.resultCid);
+      setSelectedResult({
+        dealId: deal.id,
+        cid: deal.resultCid,
+        content: response.formatted,
+        isJson: response.isJson,
+      });
+      setResultState('idle');
+    } catch {
+      setResultState('error');
     }
   }
 
@@ -252,6 +290,15 @@ export function DealsMonitor() {
                 </div>
               </div>
 
+              {deal.resultCid ? (
+                <div className="deal-actions">
+                  <button type="button" className="button" onClick={() => void openResultModal(deal)}>
+                    View result
+                  </button>
+                  <span className="mini-meta">CID {deal.resultCid.slice(0, 12)}...</span>
+                </div>
+              ) : null}
+
               <div className="progress-head">
                 <span>Progress</span>
                 <strong>{deal.progress}%</strong>
@@ -273,6 +320,32 @@ export function DealsMonitor() {
           </article>
         ))}
       </section>
+
+      {selectedResult ? (
+        <div className="modal-backdrop" onClick={() => setSelectedResult(null)}>
+          <div className="modal-panel panel" onClick={(event) => event.stopPropagation()}>
+            <div className="delegation-head">
+              <div>
+                <p className="eyebrow">Submitted work</p>
+                <h2>Review result</h2>
+              </div>
+              <button type="button" className="button" onClick={() => setSelectedResult(null)}>
+                Close
+              </button>
+            </div>
+            <p className="delegation-lead">
+              This is the work shared for deal #{selectedResult.dealId}.
+            </p>
+            {resultState === 'loading' ? (
+              <div className="result-state">Loading the submitted result...</div>
+            ) : resultState === 'error' ? (
+              <div className="result-state">We couldn't open this result right now.</div>
+            ) : (
+              <pre className="delegation-code result-code">{selectedResult.content}</pre>
+            )}
+          </div>
+        </div>
+      ) : null}
     </>
   );
 }
