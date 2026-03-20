@@ -25,3 +25,6 @@ export const VERIFIER_CAVEAT_ADDRESS =
 
 export const IPFS_CAVEAT_ADDRESS =
   process.env.NEXT_PUBLIC_IPFS_CAVEAT_ADDRESS ?? '';
+
+export const IPFS_GATEWAY =
+  process.env.NEXT_PUBLIC_IPFS_GATEWAY?.replace(/\/$/, '') ?? 'https://ipfs.filebase.io/ipfs';

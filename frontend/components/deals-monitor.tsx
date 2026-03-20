@@ -2,8 +2,10 @@
 
 import { useEffect, useState } from 'react';
 import { listDeals } from '@/lib/api/deals';
+import { listJobs } from '@/lib/api/jobs';
+import { fetchIpfsTaskTitle } from '@/lib/ipfs';
 import type { DealCardData } from '@/lib/mock-data';
-import type { ApiDeal } from '@/lib/types/api';
+import type { ApiDeal, ApiJob } from '@/lib/types/api';
 
 const STATUS_DETAILS: Record<DealCardData['status'], { progress: number; confirmation: DealCardData['confirmation'] }> = {
   NEGOTIATING: { progress: 20, confirmation: 'Pending' },
@@ -46,7 +48,36 @@ function formatAmount(amount: string) {
   }
 }
 
-function mapApiDeal(deal: ApiDeal): DealCardData {
+async function resolveDealTaskTitle(deal: ApiDeal, jobsById: Map<string, ApiJob>) {
+  if (deal.job?.title) {
+    return deal.job.title;
+  }
+
+  const jobId = deal.job_id ?? deal.jobId;
+  if (jobId) {
+    const job = jobsById.get(jobId);
+    if (job?.title) {
+      return job.title;
+    }
+  }
+
+  const taskCid = deal.task_cid ?? deal.taskCid;
+  if (taskCid) {
+    try {
+      const title = await fetchIpfsTaskTitle(taskCid);
+      console.log(title)
+      if (title) {
+        return title;
+      }
+    } catch {
+      // Ignore IPFS title lookup failures and fall back below.
+    }
+  }
+
+  return 'Task title unavailable';
+}
+
+async function mapApiDeal(deal: ApiDeal, jobsById: Map<string, ApiJob>): Promise<DealCardData> {
   const status =
     deal.status === 'CREATED'
       ? 'NEGOTIATING'
@@ -65,7 +96,7 @@ function mapApiDeal(deal: ApiDeal): DealCardData {
   return {
     id,
     worker: deal.worker,
-    task: deal.job?.title ?? 'Task details synced from your live deal activity.',
+    task: await resolveDealTaskTitle(deal, jobsById),
     escrow: formatAmount(deal.amount),
     status,
     deadline: displayDate,
@@ -105,18 +136,31 @@ export function DealsMonitor() {
 
     async function load() {
       try {
-        const response = await listDeals({ limit: 6 });
+        const [dealsResponse, jobsResponse] = await Promise.all([
+          listDeals({ limit: 6 }),
+          listJobs(),
+        ]);
         if (!active) {
           return;
         }
 
-        if (response.deals.length === 0) {
+        if (dealsResponse.deals.length === 0) {
           setItems([]);
           setSource('empty');
           return;
         }
 
-        setItems(response.deals.map(mapApiDeal));
+        const jobsById = new Map(jobsResponse.jobs.map((job) => [job.id, job]));
+
+        const mappedDeals = await Promise.all(
+          dealsResponse.deals.map((deal) => mapApiDeal(deal, jobsById)),
+        );
+
+        if (!active) {
+          return;
+        }
+
+        setItems(mappedDeals);
         setSource('api');
       } catch {
         if (active) {
