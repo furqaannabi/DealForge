@@ -127,6 +127,7 @@ export async function syncDealToDb(
       ...(settledAt ? { settledAt } : {}),
     },
     update: {
+      ...(opts.jobId ? { jobId: opts.jobId } : {}),
       status: onChain.status,
       ...(settledAt ? { settledAt } : {}),
     },
