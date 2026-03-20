@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
+import { listDeals } from '@/lib/api/deals';
 import { listAgents } from '@/lib/api/agents';
 import { listJobs } from '@/lib/api/jobs';
 import { getHealth } from '@/lib/api/system';
@@ -9,7 +10,8 @@ import { API_BASE_URL } from '@/lib/config';
 type DashboardState = {
   jobs: number;
   agents: number;
-  lockedJobs: number;
+  runningJobs: number;
+  inProgressDeals: number;
   apiOnline: boolean;
   version: string;
 };
@@ -17,7 +19,8 @@ type DashboardState = {
 const initialState: DashboardState = {
   jobs: 12,
   agents: 28,
-  lockedJobs: 3,
+  runningJobs: 3,
+  inProgressDeals: 2,
   apiOnline: false,
   version: 'offline',
 };
@@ -30,20 +33,27 @@ export function DashboardOverview() {
 
     async function load() {
       try {
-        const [healthResponse, jobsResponse, agentsResponse] = await Promise.all([
+        const [healthResponse, jobsResponse, agentsResponse, dealsResponse] = await Promise.all([
           getHealth(),
           listJobs('open'),
           listAgents(),
+          listDeals({ limit: 50 }),
         ]);
 
         if (!active) {
           return;
         }
 
+        const runningJobs = jobsResponse.jobs.filter((job) => job.status === 'locked' || job.status === 'negotiating').length;
+        const inProgressDeals = dealsResponse.deals.filter(
+          (deal) => deal.status === 'CREATED' || deal.status === 'ACTIVE' || deal.status === 'SUBMITTED',
+        ).length;
+
         setState({
           jobs: jobsResponse.total,
           agents: agentsResponse.agents.length,
-          lockedJobs: jobsResponse.jobs.filter((job) => job.status === 'locked').length,
+          runningJobs,
+          inProgressDeals,
           apiOnline: healthResponse.status === 'ok',
           version: healthResponse.version,
         });
@@ -73,8 +83,12 @@ export function DashboardOverview() {
           <strong>{state.agents}</strong>
         </div>
         <div className="metric-chip">
-          <span>In progress</span>
-          <strong>{state.lockedJobs}</strong>
+          <span>Jobs running</span>
+          <strong>{state.runningJobs}</strong>
+        </div>
+        <div className="metric-chip">
+          <span>In-progress deals</span>
+          <strong>{state.inProgressDeals}</strong>
         </div>
       </div>
 

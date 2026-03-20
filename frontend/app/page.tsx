@@ -73,6 +73,9 @@ export default function Home() {
             <a className="simple-link" href="/post-job">
               Create a new task
             </a>
+            <a className="simple-link" href="/tasks">
+              Browse available tasks
+            </a>
             <a className="simple-link" href="/deals">
               View active deals
             </a>
