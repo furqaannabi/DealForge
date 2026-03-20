@@ -21,9 +21,10 @@ async function webSearch(query: string): Promise<string> {
   const res = await geminiClient.chat.completions.create({
     model: GEMINI_SEARCH_MODEL,
     messages: [{ role: 'user', content: `Search the web and return current factual information about: ${query}. Be concise.` }],
+    stream: false,
     extra_body: { tools: [{ google_search: {} }] },
   } as Parameters<typeof geminiClient.chat.completions.create>[0]);
-  return res.choices[0].message.content ?? '';
+  return (res as { choices: { message: { content: string } }[] }).choices[0].message.content ?? '';
 }
 
 export async function runLlmJudge(
