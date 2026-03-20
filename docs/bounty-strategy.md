@@ -1,7 +1,7 @@
 # DealForge — Bounty Strategy
 
 > Full track list: [`docs/synthesis_tracks.md`](./synthesis_tracks.md)  
-> Total addressable prize pool: **~$32,000+** across primary targets
+> Total addressable prize pool: **~$37,000+** across primary targets
 
 ---
 
@@ -130,6 +130,46 @@ DealForge is infrastructure — it multiplies what other agents can do. Not just
 
 ---
 
+### 🏅 MetaMask — $5,000 to Open Track *(medium confidence)*
+
+MetaMask contributed $5,000 to the Open Track and wants to see their **Delegation Toolkit (ERC-7715 / Gator)** used meaningfully.
+
+**The design tension:** Delegation is lazy ("you're allowed to pull funds when needed") but escrow is eager ("funds locked now"). These compose cleanly:
+
+```
+Human signs delegation on frontend → DealForge contract is grantee
+                                    ↓
+Agent negotiates deal off-chain (no tx needed yet)
+                                    ↓
+Agent locks deal → contract calls redeemDelegation()
+                   pulls funds from human wallet INTO escrow atomically
+                                    ↓
+Funds locked in escrow ✅ — standard lifecycle continues unchanged
+```
+
+**`redeemDelegation` IS the escrow lock.** Instead of the user pushing ETH (`msg.value`), the contract pulls it via the delegation when the agent commits to a deal. Human does ONE thing — signs a budget delegation — then the agent is fully autonomous from that point.
+
+**Role mapping:**
+| Role | Who | Wallet |
+|---|---|---|
+| Task Agent (payer) | Human user | MetaMask smart wallet |
+| Worker Agent | Autonomous AI agent | EOA / smart wallet |
+| Negotiator | DealForge NegotiationEngine | Off-chain only |
+| Verifier | Verifier node | EOA, pre-funded |
+
+**Required changes:**
+1. Add `createDealWithDelegation(delegation, sig, ...)` to `DealForge.sol` that calls `IDelegationManager.redeemDelegation` and replaces `msg.value`
+2. Integrate [MetaMask Delegation Toolkit SDK](https://github.com/MetaMask/delegation-toolkit) on the frontend — one delegation creation screen with a budget cap
+3. Store the signed delegation in DB so the agent can reference it when autonomously locking a deal
+4. Settlement, verifier, and IPFS flows are **untouched**
+
+**What to emphasise in submission:**
+- Human sets budget once; agent runs fully autonomously from there
+- Delegation-funded escrow is a new primitive — not just a UI pattern
+- Frames DealForge as infrastructure for delegated autonomous agent spending
+
+---
+
 ## Deprioritised Tracks
 
 | Track | Reason |
@@ -152,10 +192,11 @@ DealForge is infrastructure — it multiplies what other agents can do. Not just
 | 2 | **Open Track** | $28,300 | Low | Auto-entry |
 | 3 | **Venice** | $11,500 | Low | Flip `LLM_PROVIDER=venice` |
 | 4 | **Arkhai** | $1,000 | Very low | Escrow = direct fit |
-| 5 | **EigenCloud** | $5,000 | Medium | Deploy verifier to TEE |
-| 6 | **Protocol Labs** | TBD | Medium | Add `agent.json` + logs |
-| 7 | **Uniswap** | $5,000 | Medium | Build swap demo deal |
-| 8 | **Base (Trading)** | $5,000 | Medium-High | Extend for autonomous trading |
+| 5 | **MetaMask** | Open Track boost | Medium | `createDealWithDelegation` + frontend delegation screen |
+| 6 | **EigenCloud** | $5,000 | Medium | Deploy verifier to TEE |
+| 7 | **Protocol Labs** | TBD | Medium | Add `agent.json` + logs |
+| 8 | **Uniswap** | $5,000 | Medium | Build swap demo deal |
+| 9 | **Base (Trading)** | $5,000 | Medium-High | Extend for autonomous trading |
 
 **Realistic target: $20,000–$30,000** if top 4–5 priorities land.
 
@@ -170,4 +211,5 @@ DealForge is infrastructure — it multiplies what other agents can do. Not just
 - [ ] Build Uniswap swap demo deal (Uniswap track)
 - [ ] Write `conversationLog` capturing human-agent collaboration
 - [ ] Ensure repo is public with open-source license ✅ (MIT already set)
+- [ ] Add `createDealWithDelegation` to `DealForge.sol` + integrate MetaMask Delegation Toolkit on frontend
 - [ ] Record a demo video showing end-to-end deal lifecycle
