@@ -31,6 +31,7 @@ contract DealForgeTest is Test {
 
     bytes32 public taskHash = keccak256("ipfs://QmTaskCID");
     bytes32 public resultHash = keccak256("ipfs://QmResultCID");
+    string public resultCid = "bafkreigdyrzt5sfp7udm7hu76uh7y26nf3efuylqabf3oclgtqy55fbzdi";
     uint256 public dealAmount = 1 ether;
     uint256 public deadline;
 
@@ -169,7 +170,7 @@ contract DealForgeTest is Test {
         uint256 dealId = _createAndAcceptDeal();
 
         vm.prank(worker);
-        dealForge.submitResult(dealId, resultHash);
+        dealForge.submitResult(dealId, resultHash, resultCid);
 
         DealForge.Deal memory deal = dealForge.getDeal(dealId);
         assertEq(deal.resultHash, resultHash);
@@ -181,7 +182,7 @@ contract DealForgeTest is Test {
 
         vm.prank(unauthorized);
         vm.expectRevert("Only worker can submit");
-        dealForge.submitResult(dealId, resultHash);
+        dealForge.submitResult(dealId, resultHash, resultCid);
     }
 
     function test_submitResult_revertsIfNotActive() public {
@@ -189,7 +190,7 @@ contract DealForgeTest is Test {
 
         vm.prank(worker);
         vm.expectRevert("Deal not in ACTIVE status");
-        dealForge.submitResult(dealId, resultHash);
+        dealForge.submitResult(dealId, resultHash, resultCid);
     }
 
     function test_submitResult_revertsIfDeadlinePassed() public {
@@ -199,7 +200,7 @@ contract DealForgeTest is Test {
 
         vm.prank(worker);
         vm.expectRevert("Deadline has passed");
-        dealForge.submitResult(dealId, resultHash);
+        dealForge.submitResult(dealId, resultHash, resultCid);
     }
 
     function test_submitResult_revertsIfResultHashEmpty() public {
@@ -207,7 +208,24 @@ contract DealForgeTest is Test {
 
         vm.prank(worker);
         vm.expectRevert("Result hash cannot be empty");
-        dealForge.submitResult(dealId, bytes32(0));
+        dealForge.submitResult(dealId, bytes32(0), resultCid);
+    }
+
+    function test_submitResult_revertsIfIpfsCidEmpty() public {
+        uint256 dealId = _createAndAcceptDeal();
+
+        vm.prank(worker);
+        vm.expectRevert("IPFS CID cannot be empty");
+        dealForge.submitResult(dealId, resultHash, "");
+    }
+
+    function test_submitResult_storesIpfsCid() public {
+        uint256 dealId = _createAndAcceptDeal();
+
+        vm.prank(worker);
+        dealForge.submitResult(dealId, resultHash, resultCid);
+
+        assertEq(dealForge.getIpfsCid(dealId), resultCid);
     }
 
     // ═══════════════════ settleDeal ═══════════════════
@@ -215,7 +233,7 @@ contract DealForgeTest is Test {
     function _createAcceptSubmitDeal() internal returns (uint256) {
         uint256 dealId = _createAndAcceptDeal();
         vm.prank(worker);
-        dealForge.submitResult(dealId, resultHash);
+        dealForge.submitResult(dealId, resultHash, resultCid);
         return dealId;
     }
 
@@ -429,7 +447,7 @@ contract DealForgeTest is Test {
         dealForge.acceptDeal(dealId);
 
         vm.prank(worker);
-        dealForge.submitResult(dealId, resultHash);
+        dealForge.submitResult(dealId, resultHash, resultCid);
 
         uint256 workerBalBefore = token.balanceOf(worker);
         vm.prank(payer);
@@ -464,7 +482,7 @@ contract DealForgeTest is Test {
         vm.prank(worker);
         dealForge.acceptDeal(0);
         vm.prank(worker);
-        dealForge.submitResult(0, resultHash);
+        dealForge.submitResult(0, resultHash, resultCid);
         vm.prank(payer);
         dealForge.settleDeal(0);
 
@@ -736,7 +754,7 @@ contract DealForgeTest is Test {
 
         // ACTIVE -> SUBMITTED
         vm.prank(worker);
-        dealForge.submitResult(dealId, resultHash);
+        dealForge.submitResult(dealId, resultHash, resultCid);
         assertEq(uint256(dealForge.getDeal(dealId).status), uint256(DealForge.DealStatus.SUBMITTED));
 
         // SUBMITTED -> SETTLED

@@ -52,6 +52,9 @@ contract DealForge is ReentrancyGuard, Ownable {
     mapping(uint256 => uint256) public acceptVotes;
     mapping(uint256 => uint256) public rejectVotes;
 
+    // IPFS CID ↔ resultHash linkage
+    mapping(uint256 => string) public dealIpfsCid;
+
     // ERC-7715 Delegation
     address public delegationManager;
     mapping(uint256 => bool) public verifierApproved;
@@ -67,7 +70,7 @@ contract DealForge is ReentrancyGuard, Ownable {
         bytes32 taskHash
     );
     event DealAccepted(uint256 indexed dealId, uint256 activationTime);
-    event ResultSubmitted(uint256 indexed dealId, bytes32 resultHash, uint256 submittedAt);
+    event ResultSubmitted(uint256 indexed dealId, bytes32 resultHash, string ipfsCid, uint256 submittedAt);
     event DealSettled(uint256 indexed dealId, address recipient, uint256 payout);
     event DealRefunded(uint256 indexed dealId, address recipient, uint256 refundAmount);
     event DisputeRaised(uint256 indexed dealId, address initiator, uint256 raisedAt);
@@ -174,18 +177,20 @@ contract DealForge is ReentrancyGuard, Ownable {
         emit DealAccepted(dealId, block.timestamp);
     }
 
-    function submitResult(uint256 dealId, bytes32 resultHash) external {
+    function submitResult(uint256 dealId, bytes32 resultHash, string calldata ipfsCid) external {
         Deal storage deal = deals[dealId];
         require(msg.sender == deal.worker, "Only worker can submit");
         require(deal.status == DealStatus.ACTIVE, "Deal not in ACTIVE status");
         require(block.timestamp <= deal.deadline, "Deadline has passed");
         require(resultHash != bytes32(0), "Result hash cannot be empty");
+        require(bytes(ipfsCid).length > 0, "IPFS CID cannot be empty");
 
         deal.resultHash = resultHash;
         deal.status = DealStatus.SUBMITTED;
         deal.submittedAt = block.timestamp;
+        dealIpfsCid[dealId] = ipfsCid;
 
-        emit ResultSubmitted(dealId, resultHash, block.timestamp);
+        emit ResultSubmitted(dealId, resultHash, ipfsCid, block.timestamp);
     }
 
     function settleDeal(uint256 dealId) external nonReentrant {
@@ -352,6 +357,10 @@ contract DealForge is ReentrancyGuard, Ownable {
 
     function getVotes(uint256 dealId) external view returns (uint256 accept, uint256 reject) {
         return (acceptVotes[dealId], rejectVotes[dealId]);
+    }
+
+    function getIpfsCid(uint256 dealId) external view returns (string memory) {
+        return dealIpfsCid[dealId];
     }
 
     // ──────────────────── Internal Helpers ────────────────────
