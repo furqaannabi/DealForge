@@ -132,43 +132,53 @@ DealForge is infrastructure — it multiplies what other agents can do. Not just
 
 ### 🏅 MetaMask — $5,000 to Open Track *(medium confidence)*
 
-MetaMask contributed $5,000 to the Open Track and wants to see their **Delegation Toolkit (ERC-7715 / Gator)** used meaningfully.
+MetaMask contributed $5,000 to the Open Track and wants to see their **Smart Accounts Kit (ERC-7710 Delegation Framework)** used meaningfully.
 
-**The design tension:** Delegation is lazy ("you're allowed to pull funds when needed") but escrow is eager ("funds locked now"). These compose cleanly:
+**Standard:** ERC-7710 (not ERC-7715). The `redeemDelegations` tx is sent by the **agent wallet (delegate EOA)** directly to the `DelegationManager` contract — not to `DealForge.sol`. The `DelegationManager` then calls `createDeal()` from the human's smart account.
+
+**How it works (per docs):**
 
 ```
-Human signs delegation on frontend → DealForge contract is grantee
-                                    ↓
-Agent negotiates deal off-chain (no tx needed yet)
-                                    ↓
-Agent locks deal → contract calls redeemDelegation()
-                   pulls funds from human wallet INTO escrow atomically
-                                    ↓
-Funds locked in escrow ✅ — standard lifecycle continues unchanged
+Frontend (one-time):
+  Human creates/connects MetaMask Smart Account (ERC-4337 — not a regular MetaMask EOA)
+  Human signs a root delegation:
+    createDelegation({ from: humanSmartAccount, to: agentWalletEOA,
+                       scope: { type: "nativeTokenTransfer", maxAmount: 0.1 ETH } })
+  Signed delegation stored in DB with the job
+
+Task Agent runtime (when NegotiationEngine accepts a proposal):
+  Encodes redeemDelegations calldata:
+    DelegationManager.encode.redeemDelegations({
+      delegations: [signedDelegation],
+      executions: [createExecution({ target: DealForge.sol, callData: createDeal(...) })]
+    })
+  Sends TX to DelegationManager address (not DealForge.sol)
+  DelegationManager validates delegation → calls createDeal() from human smart account
+  DealForge.sol receives standard createDeal() with msg.value from human smart account
+  Escrow locked ✅ — rest of lifecycle unchanged
 ```
 
-**`redeemDelegation` IS the escrow lock.** Instead of the user pushing ETH (`msg.value`), the contract pulls it via the delegation when the agent commits to a deal. Human does ONE thing — signs a budget delegation — then the agent is fully autonomous from that point.
+**`DealForge.sol` needs NO changes.** `DelegationManager` wraps the existing `createDeal()`.
 
 **Role mapping:**
 | Role | Who | Wallet |
 |---|---|---|
-| Task Agent (payer) | Human user | MetaMask smart wallet |
-| Worker Agent | Autonomous AI agent | EOA / smart wallet |
+| Task Agent (payer) | Human user | MetaMask Smart Account (ERC-4337) |
+| Worker Agent | Autonomous AI agent | EOA |
 | Negotiator | DealForge NegotiationEngine | Off-chain only |
 | Verifier | Verifier node | EOA, pre-funded |
 
 **Required changes:**
-1. Add `createDealWithDelegation(delegation, sig, ...)` to `DealForge.sol` that calls `IDelegationManager.redeemDelegation` and replaces `msg.value`
-2. Integrate [MetaMask Delegation Toolkit SDK](https://github.com/MetaMask/delegation-toolkit) on the frontend — one delegation creation screen with a budget cap
-3. Store the signed delegation in DB so the agent can reference it when autonomously locking a deal
-4. Settlement, verifier, and IPFS flows are **untouched**
+1. **Frontend:** onboard user into a MetaMask Smart Account — biggest lift
+2. **Frontend:** `createDelegation()` step — human signs ETH spend cap to agent wallet address
+3. **API:** store `signedDelegation` in Jobs table
+4. **Task Agent runtime:** call `DelegationManager.redeemDelegations()` on accept instead of `createDeal()` directly
+5. `DealForge.sol`, verifier, IPFS — **all untouched**
 
-**What to emphasise in submission:**
-- Human sets budget once; agent runs fully autonomously from there
-- Delegation-funded escrow is a new primitive — not just a UI pattern
-- Frames DealForge as infrastructure for delegated autonomous agent spending
+**What to emphasise:** Human authorises once; agent spends autonomously within cap via ERC-7710.
 
 ---
+
 
 ## Deprioritised Tracks
 
