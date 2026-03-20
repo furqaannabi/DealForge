@@ -25,8 +25,14 @@ export async function scanExistingDeals(): Promise<void> {
       console.warn(`[scan] API returned ${res.status} — skipping startup scan`);
       return;
     }
-    const body = await res.json() as { deals: { dealId: string }[] };
-    deals = body.deals ?? [];
+    const body = await res.json() as { deals: { dealId: string; taskCid?: string | null }[] };
+    deals = (body.deals ?? []).filter((d) => {
+      if (!d.taskCid) {
+        console.log(`[scan] Deal #${d.dealId} has no taskCid — skipping`);
+        return false;
+      }
+      return true;
+    });
   } catch (err) {
     console.warn('[scan] Could not reach API — skipping startup scan:', err);
     return;

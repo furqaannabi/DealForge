@@ -50,7 +50,7 @@ export async function processSubmittedDeal(
 
     // ── 2. Fetch content from IPFS ────────────────────────────────────────────
     console.log(`[listener] Fetching task from IPFS (${taskHashHex})`);
-    const task = await fetchTask(taskHashHex);
+    const task = await fetchTask(taskHashHex, dealId);
 
     console.log(`[listener] Fetching result from IPFS (${resultHashHex})`);
     const result = await fetchResult(resultHashHex, dealId);

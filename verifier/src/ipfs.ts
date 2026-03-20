@@ -67,18 +67,29 @@ export async function fetchTask(taskHashBytes32: string, dealId?: bigint): Promi
     const deal = await fetchDealRecord(dealId);
     const cid = deal?.taskCid ?? deal?.job?.taskDescriptionCid;
     if (cid) return fetchByCid<TaskDescription>(cid);
+    throw new Error(`No task CID stored for deal #${dealId} — skipping`);
   }
-  // Fallback: reconstruct CIDv0 from bytes32
   const cid = bytes32ToCid(taskHashBytes32);
   return fetchByCid<TaskDescription>(cid);
 }
 
 export async function fetchResult(resultHashBytes32: string, dealId?: bigint): Promise<TaskResult> {
+  let raw: unknown;
+
   if (dealId !== undefined) {
     const deal = await fetchDealRecord(dealId);
-    if (deal?.resultCid) return fetchByCid<TaskResult>(deal.resultCid);
+    if (deal?.resultCid) raw = await fetchByCid<unknown>(deal.resultCid);
   }
-  // Fallback: reconstruct CIDv0 from bytes32
-  const cid = bytes32ToCid(resultHashBytes32);
-  return fetchByCid<TaskResult>(cid);
+
+  if (raw === undefined) {
+    const cid = bytes32ToCid(resultHashBytes32);
+    raw = await fetchByCid<unknown>(cid);
+  }
+
+  // If the worker uploaded raw JSON (no wrapper), normalize it into TaskResult shape
+  if (raw && typeof raw === 'object' && !('output' in raw)) {
+    return { output: raw, logs: [], metrics: {}, timestamp: new Date().toISOString() };
+  }
+
+  return raw as TaskResult;
 }

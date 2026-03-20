@@ -199,6 +199,24 @@ router.post('/', requireAuth, async (req, res) => {
   res.status(201).json(deal);
 });
 
+// ─── PATCH /deals/:dealId — Update taskCid (payer only) ──────────────────────
+
+router.patch('/:dealId', requireAuth, async (req, res) => {
+  const dealId = BigInt(req.params.dealId);
+  const deal = await db.deal.findUnique({ where: { dealId } });
+  if (!deal) { res.status(404).json({ error: 'Deal not found' }); return; }
+  if (deal.payer !== req.agentAddress) {
+    res.status(403).json({ error: 'Only the payer can update deal metadata' });
+    return;
+  }
+
+  const { task_cid } = req.body as { task_cid?: string };
+  if (!task_cid) { res.status(400).json({ error: 'Nothing to update' }); return; }
+
+  const updated = await db.deal.update({ where: { dealId }, data: { taskCid: task_cid } });
+  res.json(updated);
+});
+
 router.post('/:dealId/delegation', requireAuth, async (req, res) => {
   const parsed = delegationSchema.safeParse(req.body.delegation);
   if (!parsed.success) { res.status(400).json({ error: parsed.error.flatten() }); return; }

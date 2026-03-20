@@ -39,8 +39,8 @@ const envSchema = z.object({
   PORT: z.coerce.number().default(8080),
   MAX_CONCURRENT_JOBS: z.coerce.number().int().positive().default(5),
 
-  // Coordination API (used to scan for existing SUBMITTED deals on startup)
-  API_BASE_URL: z.string().url().optional(),
+  // Coordination API (required for IPFS CID resolution and startup scan)
+  API_BASE_URL: z.string().url().optional(), // validated manually below
 });
 
 function loadConfig() {
@@ -53,10 +53,15 @@ function loadConfig() {
 
   const env = result.data;
   const providerDefaults = DEFAULT_LLMS[env.LLM_PROVIDER];
-  const apiKey = env.LLM_PROVIDER === 'venice' ? env.VENICE_INFERENCE_KEY : env.GEMINI_API_KEY;
+  const errors: string[] = [];
 
-  if (!apiKey) {
-    console.error(`❌ Missing API key for LLM provider "${env.LLM_PROVIDER}"`);
+  const apiKey = env.LLM_PROVIDER === 'venice' ? env.VENICE_INFERENCE_KEY : env.GEMINI_API_KEY;
+  if (!apiKey) errors.push(`Missing API key for LLM provider "${env.LLM_PROVIDER}" (set ${env.LLM_PROVIDER === 'venice' ? 'VENICE_INFERENCE_KEY' : 'GEMINI_API_KEY'})`);
+  if (!env.GEMINI_API_KEY) errors.push('GEMINI_API_KEY is required for web search verification');
+  if (!env.API_BASE_URL) errors.push('API_BASE_URL is required for IPFS CID resolution and startup scan');
+
+  if (errors.length > 0) {
+    errors.forEach((e) => console.error(`❌ ${e}`));
     process.exit(1);
   }
 
