@@ -49,15 +49,6 @@ const envSchema = z.object({
   BASE_SEPOLIA_RPC_URL: z.string().url().default('https://sepolia.base.org'),
   BASE_WS_URL: z.string().url().optional(),
   BASE_SEPOLIA_WS_URL: z.string().url().optional(),
-  DEALFORGE_CONTRACT_ADDRESS: z
-    .string()
-    .regex(/^0x[0-9a-fA-F]{40}$/)
-    .default(
-      process.env.NODE_ENV === 'production'
-        ? DEALFORGE_ADDRESS_BASE_MAINNET
-        : DEALFORGE_ADDRESS_BASE_SEPOLIA,
-    )
-    .optional(),
 
   // Auth
   JWT_SECRET: z.string().min(32).default('change-me-in-production-32-chars-min'),
@@ -107,6 +98,9 @@ function loadConfig() {
 
   return {
     ...env,
+    DEALFORGE_CONTRACT_ADDRESS: env.NODE_ENV === 'production'
+      ? DEALFORGE_ADDRESS_BASE_MAINNET
+      : DEALFORGE_ADDRESS_BASE_SEPOLIA,
     DELEGATION_MANAGER_ADDRESS: smartAccountsEnvironment.DelegationManager,
     LLM_API_KEY: apiKey,
     LLM_BASE_URL: env.LLM_BASE_URL ?? providerDefaults.baseURL,
