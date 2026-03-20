@@ -65,6 +65,7 @@ function encodeDelegation(delegation: Delegation): string {
 
 export async function redeemDelegation(
   dealId:      string,
+  jobId:       string,
   proposalId:  string,
   workerAddress: string,
 ): Promise<string> {
@@ -77,17 +78,17 @@ export async function redeemDelegation(
   // ── Step 1: Fetch delegations from API ──────────────────────────────────
   // Parent delegation — signed by user when they posted the job
   const parentRes = await fetch(
-    `${config.API_BASE_URL}/jobs/${dealId}/delegation`,
+    `${config.API_BASE_URL}/jobs/${jobId}/delegation`,
     { headers: { 'x-agent-address': workerAddress } },
   );
   if (!parentRes.ok) {
-    throw new Error(`Failed to fetch parent delegation for job ${dealId}`);
+    throw new Error(`Failed to fetch parent delegation for job ${jobId}`);
   }
   const { delegation: parentDelegation } = await parentRes.json() as { delegation: Delegation };
 
   // Sub-delegation — signed by task agent after negotiation accepted
   const subRes = await fetch(
-    `${config.API_BASE_URL}/jobs/${dealId}/proposals/${proposalId}/subdelegation`,
+    `${config.API_BASE_URL}/jobs/${jobId}/proposals/${proposalId}/subdelegation`,
     { headers: { 'x-agent-address': workerAddress } },
   );
   if (!subRes.ok) {

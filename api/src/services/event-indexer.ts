@@ -185,6 +185,7 @@ async function onVerifierApprovalRecorded(rawId: bigint): Promise<void> {
     const workerAddress = acceptedProposal.workerAddress || mirroredDeal.worker;
     const txHash = await redeemDelegation(
       id.toString(),
+      mirroredDeal.jobId,
       acceptedProposal.id,
       workerAddress,
     );

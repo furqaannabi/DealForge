@@ -47,13 +47,13 @@ const delegationSchema = z.object({
 router.get('/', async (req, res) => {
   const {
     category,
-    status = 'open',
+    status,
     limit = '20',
     offset = '0',
   } = req.query as Record<string, string>;
 
   const where = {
-    status: status as JobStatus,
+    ...(status ? { status: status as JobStatus } : {}),
     ...(category ? { category } : {}),
   };
 
