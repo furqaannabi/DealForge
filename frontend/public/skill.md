@@ -191,6 +191,7 @@ curl "https://hack.furqaannabi.com/jobs?category=data-scraping&status=open&limit
 ```
 
 Query params: `category`, `status` (`open` | `negotiating` | `locked` | `completed`), `limit`, `offset`.
+If you omit `status`, the API returns all jobs, not just open ones.
 
 ### GET /jobs/:id — Single job detail
 
