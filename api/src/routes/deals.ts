@@ -9,6 +9,10 @@ import { config } from '../config';
 
 const router = Router();
 
+function parseDealId(raw: string): bigint | null {
+  try { return BigInt(raw); } catch { return null; }
+}
+
 // ─── Validation schemas ──────────────────────────────────────────────────────
 
 const mirrorDealSchema = z.object({
@@ -59,7 +63,8 @@ router.get('/', async (req, res) => {
 // ─── GET /deals/:dealId — Get deal (DB + optional on-chain sync) ─────────────
 
 router.get('/:dealId', async (req, res) => {
-  const dealId = BigInt(req.params.dealId);
+  const dealId = parseDealId(req.params.dealId);
+  if (dealId === null) { res.status(400).json({ error: "Invalid dealId" }); return; }
   const sync = req.query.sync === 'true';
 
   if (sync) {
@@ -92,7 +97,8 @@ router.get('/:dealId/chain', async (req, res) => {
     return;
   }
 
-  const dealId = BigInt(req.params.dealId);
+  const dealId = parseDealId(req.params.dealId);
+  if (dealId === null) { res.status(400).json({ error: "Invalid dealId" }); return; }
   const onChain = await getDealOnChain(dealId);
 
   // Serialize bigints for JSON
@@ -194,7 +200,8 @@ router.post('/', requireAuth, async (req, res) => {
 // ─── PATCH /deals/:dealId — Update taskCid (payer only) ──────────────────────
 
 router.patch('/:dealId', requireAuth, async (req, res) => {
-  const dealId = BigInt(req.params.dealId);
+  const dealId = parseDealId(req.params.dealId);
+  if (dealId === null) { res.status(400).json({ error: "Invalid dealId" }); return; }
   const deal = await db.deal.findUnique({ where: { dealId } });
   if (!deal) { res.status(404).json({ error: 'Deal not found' }); return; }
   if (deal.payer !== req.agentAddress) {
@@ -213,7 +220,8 @@ router.post('/:dealId/delegation', requireAuth, async (req, res) => {
   const parsed = delegationSchema.safeParse(req.body.delegation);
   if (!parsed.success) { res.status(400).json({ error: parsed.error.flatten() }); return; }
 
-  const dealId = BigInt(req.params.dealId);
+  const dealId = parseDealId(req.params.dealId);
+  if (dealId === null) { res.status(400).json({ error: "Invalid dealId" }); return; }
   const deal = await db.deal.findUnique({
     where: { dealId },
     select: { jobId: true, payer: true },
@@ -249,7 +257,8 @@ router.post('/:dealId/delegation', requireAuth, async (req, res) => {
 // ─── POST /deals/:dealId/submit-result — Worker uploads result to IPFS ───────
 
 router.post('/:dealId/submit-result', requireAuth, async (req, res) => {
-  const dealId = BigInt(req.params.dealId);
+  const dealId = parseDealId(req.params.dealId);
+  if (dealId === null) { res.status(400).json({ error: "Invalid dealId" }); return; }
 
   const deal = await db.deal.findUnique({ where: { dealId } });
   if (!deal) { res.status(404).json({ error: 'Deal not found — POST /deals first' }); return; }
@@ -287,7 +296,8 @@ router.post('/:dealId/sync', requireAuth, async (req, res) => {
     return;
   }
 
-  const dealId = BigInt(req.params.dealId);
+  const dealId = parseDealId(req.params.dealId);
+  if (dealId === null) { res.status(400).json({ error: "Invalid dealId" }); return; }
 
   const existing = await db.deal.findUnique({ where: { dealId } });
   if (!existing) { res.status(404).json({ error: 'Deal not in DB — POST /deals first' }); return; }
