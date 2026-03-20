@@ -173,6 +173,7 @@ router.post('/', requireAuth, async (req, res) => {
       ...(settledAt ? { settledAt } : {}),
     },
     update: {
+      ...(job_id ? { jobId: job_id } : {}),
       status: onChain.status,
       txHash: tx_hash,
       ...(resolvedTaskCid ? { taskCid: resolvedTaskCid } : {}),
