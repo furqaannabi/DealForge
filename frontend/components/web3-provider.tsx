@@ -4,6 +4,7 @@ import { ReactNode, useState } from 'react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { ConnectKitProvider, getDefaultConfig } from 'connectkit';
 import { WagmiProvider, createConfig, http } from 'wagmi';
+import { coinbaseWallet, injected, safe, walletConnect } from '@wagmi/connectors';
 import { base, baseSepolia } from 'wagmi/chains';
 import {
   DEALFORGE_CHAIN_ID,
@@ -11,6 +12,40 @@ import {
 } from '@/lib/config';
 
 const activeChain = DEALFORGE_CHAIN_ID === 8453 ? base : baseSepolia;
+const hasWindow = typeof window !== 'undefined';
+const shouldUseSafeConnector = hasWindow && window.parent !== window;
+const connectors = [
+  ...(shouldUseSafeConnector
+    ? [
+        safe({
+          allowedDomains: [/gnosis-safe.io$/, /app.safe.global$/],
+        }),
+      ]
+    : []),
+  injected({
+    target: 'metaMask',
+    shimDisconnect: true,
+  }),
+  coinbaseWallet({
+    appName: 'DealForge',
+    appLogoUrl: undefined,
+    overrideIsMetaMask: false,
+  }),
+  ...(WALLETCONNECT_PROJECT_ID
+    ? [
+        walletConnect({
+          showQrModal: false,
+          projectId: WALLETCONNECT_PROJECT_ID,
+          metadata: {
+            name: 'DealForge',
+            description: 'Autonomous Agent-to-Agent Deal Protocol',
+            url: 'https://dealforge.local',
+            icons: [],
+          },
+        }),
+      ]
+    : []),
+];
 
 const config = createConfig(
   getDefaultConfig({
@@ -19,6 +54,7 @@ const config = createConfig(
     appUrl: 'https://dealforge.local',
     walletConnectProjectId: WALLETCONNECT_PROJECT_ID,
     chains: [activeChain],
+    connectors,
     transports: {
       [activeChain.id]: http(),
     },
