@@ -1,6 +1,7 @@
 import 'dotenv/config';
 import { z } from 'zod';
-import { DEALFORGE_ADDRESS_BASE_SEPOLIA } from '../../shared/abis/DealForge';
+
+const DEALFORGE_ADDRESS_BASE_SEPOLIA = '0x4C1a069458467fb2d73D47B4dBf49bEb9291af5C';
 
 const DEFAULT_LLM_PROVIDER = 'venice' as const;
 const DEFAULT_LLMS = {
