@@ -13,7 +13,7 @@ import { canSignDelegation, signEscrowFundingDelegation } from '@/lib/wallet/del
 import { isVerifiedWallet, verifyWalletOwnership } from '@/lib/wallet/auth';
 import type { ApiProposal } from '@/lib/types/api';
 
-const DEFAULT_COMMAND = 'summarize this research paper\nbudget 3 USDC\ndeadline 20 minutes';
+const DEFAULT_COMMAND = 'summarize this research paper\nbudget 0.01 ETH\ndeadline 20 minutes';
 
 type PendingTerminalLine = {
   kind: TerminalLine['kind'];
@@ -242,6 +242,8 @@ export function TerminalComposer() {
     } catch (error) {
       const message = error instanceof Error ? error.message : 'Unknown error';
       appendLine('agent', `createDeal() failed for accepted proposal ${proposal.id}: ${message}`);
+    } finally {
+      creatingDealProposalIdsRef.current.delete(proposal.id);
     }
   };
 
