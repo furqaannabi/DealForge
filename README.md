@@ -6,6 +6,22 @@ Built for the [Synthesis Hackathon](https://synthesis.md) · Deployed on **Base*
 
 ---
 
+## Live Deployment
+
+| | |
+|---|---|
+| **Frontend** | https://deal-forge-tan.vercel.app/ |
+| **Verifier Node (TEE)** | EigenCloud Sepolia — `34.143.167.61` |
+| **Verifier App ID** | `0x7155122A3b25cD329fd2001fd61c0D94BeD3f78E` |
+| **Verifier EVM Address** | `0x3f36746f6612b09eba345f245dbc4a1b86bef4f9` |
+| **Build** | ✅ Verifiable (attested by EigenCloud) |
+| **Attestation Dashboard** | https://verify-sepolia.eigencloud.xyz/app/0x7155122A3b25cD329fd2001fd61c0D94BeD3f78E |
+| **Release Time** | 2026-03-21 06:00:12 UTC |
+| **Instance** | `g1-micro-1v` |
+
+---
+
+
 ## What it does
 
 DealForge provides the missing infrastructure layer for autonomous agent economies:

@@ -60,6 +60,76 @@ The image exposes port `8080` and includes a `HEALTHCHECK` against `/health`.
 
 ---
 
+## EigenCloud (TEE) Deployment
+
+Deploys the verifier inside a Trusted Execution Environment (TEE) on EigenCloud Sepolia for the EigenCloud bounty track.
+
+### Prerequisites
+
+```bash
+npm install -g @eigenlabs/ecloud-cli   # install CLI once
+ecloud auth login                      # authenticate
+ecloud billing subscribe               # activate subscription (required)
+docker login                           # log in to Docker Hub (for push path)
+```
+
+### Option A — Verifiable source build *(recommended for bounty)*
+
+Triggers a reproducible build from GitHub so EigenCloud can attest the binary.
+
+> **Requirements:** repo must be **public** and you need the **full 40-char commit SHA**.
+
+```bash
+# Get current commit SHA
+git rev-parse HEAD
+
+# Deploy (run from repo root or verifier/ — doesn't matter)
+ecloud compute app deploy
+```
+
+Answer the prompts exactly as follows:
+
+| Prompt | Value |
+|---|---|
+| Build from verifiable source? | **Yes** |
+| Choose verifiable source type | **Build from git source** |
+| Public git repository URL | `https://github.com/furqaannabi/DealForge/` |
+| Git commit SHA (40 hex chars) | *(output of `git rev-parse HEAD`)* |
+| Build context path (relative to repo) | `verifier` |
+| Dockerfile path (relative to build context) | `Dockerfile` |
+| Caddyfile path | *(leave blank)* |
+| Dependency digests | *(leave blank)* |
+
+> ⚠️ **Common mistake:** Do NOT use `verifier\Dockerfile` (Windows backslash). The build runs on Linux. Use `verifier` as the context and `Dockerfile` as the path — no slashes needed.
+
+### Option B — Push existing image
+
+Build locally, push to Docker Hub, then point EigenCloud at the image.
+
+```bash
+# 1. Build and push
+cd verifier
+docker build -t furqaannabi/dealforge-verifier:latest .
+docker push furqaannabi/dealforge-verifier:latest
+
+# 2. Deploy
+ecloud compute app deploy
+```
+
+Answer the prompts:
+
+| Prompt | Value |
+|---|---|
+| Build from verifiable source? | **No** |
+| Choose deployment method | **Deploy existing image from registry** |
+| Docker image reference | `docker.io/furqaannabi/dealforge-verifier:latest` |
+
+### After deployment
+
+EigenCloud will provide an app URL. Set environment variables in the EigenCloud dashboard (same vars as the `.env` table below).
+
+
+
 ## Environment variables
 
 | Variable | Required | Description |
