@@ -76,7 +76,7 @@ export async function getDealOnChain(dealId: bigint): Promise<OnChainDeal> {
   const contract = getContract();
   console.log(`[getDealOnChain] dealId=${dealId}`);
   const d = await contract.getDeal(dealId);
-  console.log(`[getDealOnChain] d=${JSON.stringify(d)}`);
+  console.log(`[getDealOnChain] d=${JSON.stringify(d, (_k, v) => (typeof v === 'bigint' ? v.toString() : v))}`);
   return {
     id: BigInt(d.id),
     payer: d.payer.toLowerCase(),
