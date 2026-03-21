@@ -1,8 +1,9 @@
 'use client';
 
 import { useEffect, useMemo, useState } from 'react';
-import { DEMO_AGENT_ADDRESS } from '@/lib/config';
+import { useAccount, useWalletClient } from 'wagmi';
 import { evaluateProposal, listJobProposals, listJobs } from '@/lib/api/jobs';
+import { createDealForAcceptedProposal } from '@/lib/onchain/dealforge';
 import type { ApiJob, ApiProposal } from '@/lib/types/api';
 
 type JobWithProposals = {
@@ -41,17 +42,49 @@ function workerLabel(proposal: ApiProposal) {
 }
 
 export function MyJobsMonitor() {
+  const { address, isConnected } = useAccount();
+  const { data: walletClient } = useWalletClient();
   const pageSize = 6;
   const [items, setItems] = useState<JobWithProposals[]>([]);
   const [source, setSource] = useState<'loading' | 'ready' | 'empty' | 'error'>('loading');
   const [page, setPage] = useState(0);
   const [totalJobs, setTotalJobs] = useState(0);
   const [evaluatingProposalId, setEvaluatingProposalId] = useState<string | null>(null);
+  const [creatingProposalIds, setCreatingProposalIds] = useState<string[]>([]);
+  const [debugMessage, setDebugMessage] = useState<string | null>(null);
+
+  const createDealFromAcceptedProposal = async (jobId: string, proposal: ApiProposal) => {
+    if (!address || !walletClient || creatingProposalIds.includes(proposal.id)) {
+      return;
+    }
+
+    setCreatingProposalIds((current) => [...current, proposal.id]);
+    try {
+      const createdDeal = await createDealForAcceptedProposal({
+        walletClient,
+        agentAddress: address.toLowerCase(),
+        jobId,
+        proposal,
+      });
+      setDebugMessage(
+        `connected=${createdDeal.connectedAccount} payer=${createdDeal.payer} mirror_header=${createdDeal.mirrorHeaderAddress}`,
+      );
+    } finally {
+      setCreatingProposalIds((current) => current.filter((id) => id !== proposal.id));
+    }
+  };
 
   useEffect(() => {
     let active = true;
 
     async function load() {
+      if (!address) {
+        setItems([]);
+        setTotalJobs(0);
+        setSource('empty');
+        return;
+      }
+
       try {
         const jobsResponse = await listJobs({
           limit: pageSize,
@@ -62,7 +95,7 @@ export function MyJobsMonitor() {
         }
 
         const agentJobs = jobsResponse.jobs
-          .filter((job) => (job.poster_address ?? job.posterAddress ?? '').toLowerCase() === DEMO_AGENT_ADDRESS.toLowerCase())
+          .filter((job) => (job.poster_address ?? job.posterAddress ?? '').toLowerCase() === address.toLowerCase())
           .sort((left, right) => {
             const leftCreatedAt = left.created_at ?? left.createdAt ?? '';
             const rightCreatedAt = right.created_at ?? right.createdAt ?? '';
@@ -107,7 +140,7 @@ export function MyJobsMonitor() {
       active = false;
       window.clearInterval(interval);
     };
-  }, [page]);
+  }, [address, page]);
 
   const totals = useMemo(() => {
     const jobs = totalJobs;
@@ -121,13 +154,17 @@ export function MyJobsMonitor() {
   }, [items, totalJobs]);
 
   const onAcceptProposal = async (jobId: string, proposal: ApiProposal) => {
-    if (evaluatingProposalId) {
+    if (evaluatingProposalId || !address || !walletClient) {
       return;
     }
 
     setEvaluatingProposalId(proposal.id);
     try {
-      await evaluateProposal(jobId, proposal.id);
+      const evaluation = await evaluateProposal(jobId, proposal.id, address.toLowerCase());
+
+      if (evaluation.decision === 'accept') {
+        // Accepted proposals require an explicit on-chain createDeal action from the UI.
+      }
 
       const [jobsResponse, proposalsResponse] = await Promise.all([
         listJobs({
@@ -174,9 +211,11 @@ export function MyJobsMonitor() {
         </span>
       </section>
 
+      {!isConnected || !address ? <section className="panel delegation-panel">Connect the task-agent wallet to view your jobs.</section> : null}
       {source === 'loading' ? <section className="panel delegation-panel">Loading your jobs...</section> : null}
-      {source === 'empty' ? <section className="panel delegation-panel">No jobs posted by the task agent yet.</section> : null}
+      {source === 'empty' && isConnected ? <section className="panel delegation-panel">No jobs posted by this task agent yet.</section> : null}
       {source === 'error' ? <section className="panel delegation-panel">Could not load jobs or proposals from the API.</section> : null}
+      {debugMessage ? <section className="panel delegation-panel">{debugMessage}</section> : null}
 
       {source === 'ready' ? (
         <>
@@ -235,6 +274,17 @@ export function MyJobsMonitor() {
                                   : proposal.status === 'countered'
                                     ? 'Accept counter-offer'
                                     : 'Accept proposal'}
+                              </button>
+                            </div>
+                          ) : proposal.status === 'accepted' ? (
+                            <div className="deal-actions">
+                              <button
+                                type="button"
+                                className="button button-primary"
+                                onClick={() => void createDealFromAcceptedProposal(job.id, proposal)}
+                                disabled={creatingProposalIds.includes(proposal.id)}
+                              >
+                                {creatingProposalIds.includes(proposal.id) ? 'Creating deal...' : 'Create deal'}
                               </button>
                             </div>
                           ) : null}

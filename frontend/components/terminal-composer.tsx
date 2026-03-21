@@ -2,15 +2,14 @@
 
 import { ChangeEvent, FormEvent, KeyboardEvent, useEffect, useMemo, useRef, useState } from 'react';
 import { ConnectKitButton } from 'connectkit';
-import { useAccount, useChainId } from 'wagmi';
-import {
-  DEALFORGE_AGENT_ADDRESS,
-  DEALFORGE_CHAIN_ID,
-  DEALFORGE_CHAIN_NAME,
-} from '@/lib/config';
+import { useAccount, useChainId, useWalletClient } from 'wagmi';
+import { DEALFORGE_CHAIN_ID, DEALFORGE_CHAIN_NAME } from '@/lib/config';
+import { registerAgent } from '@/lib/api/agents';
 import { createJob, evaluateProposal, listJobProposals } from '@/lib/api/jobs';
 import { commandCatalog, initialTerminalLines, type TerminalLine } from '@/lib/mock-data';
+import { createDealForAcceptedProposal } from '@/lib/onchain/dealforge';
 import { canSignDelegation, signEscrowFundingDelegation } from '@/lib/wallet/delegation';
+import { isVerifiedWallet, verifyWalletOwnership } from '@/lib/wallet/auth';
 import type { ApiProposal } from '@/lib/types/api';
 
 const DEFAULT_COMMAND = 'summarize this research paper\nbudget 3 USDC\ndeadline 20 minutes';
@@ -107,14 +106,6 @@ function formatWeiAsEth(value: string) {
   }
 }
 
-function isTaskAgentWallet(address?: string) {
-  if (!address) {
-    return false;
-  }
-
-  return address.toLowerCase() === DEALFORGE_AGENT_ADDRESS.toLowerCase();
-}
-
 function Typewriter({ text }: { text: string }) {
   const [visible, setVisible] = useState('');
 
@@ -137,6 +128,7 @@ function Typewriter({ text }: { text: string }) {
 export function TerminalComposer() {
   const { address, isConnected } = useAccount();
   const chainId = useChainId();
+  const { data: walletClient } = useWalletClient();
   const [input, setInput] = useState(DEFAULT_COMMAND);
   const [lines, setLines] = useState<TerminalLine[]>(initialTerminalLines);
   const [queuedResponse, setQueuedResponse] = useState<PendingTerminalLine[]>([]);
@@ -152,6 +144,7 @@ export function TerminalComposer() {
   const terminalRef = useRef<HTMLDivElement>(null);
   const seenProposalIdsRef = useRef<Set<string>>(new Set());
   const proposalStatusesRef = useRef<Map<string, ApiProposal['status']>>(new Map());
+  const creatingDealProposalIdsRef = useRef<Set<string>>(new Set());
 
   const suggestions = useMemo(() => {
     const seed = input.split('\n')[0].trim().toLowerCase();
@@ -159,7 +152,6 @@ export function TerminalComposer() {
   }, [input]);
 
   const wrongChain = isConnected ? chainId !== DEALFORGE_CHAIN_ID : false;
-  const connectedAsTaskAgent = isTaskAgentWallet(address);
 
   useEffect(() => {
     if (!isConnected || !address) {
@@ -211,6 +203,44 @@ export function TerminalComposer() {
     setLines((current) => [...current, { id: crypto.randomUUID(), kind, text }]);
   };
 
+  const createDealFromAcceptedProposal = async (proposal: ApiProposal) => {
+    if (!activeJobId) {
+      return;
+    }
+
+    if (!address || !walletClient) {
+      appendLine('agent', 'Accepted proposal detected, but the task-agent wallet client is unavailable for createDeal().');
+      return;
+    }
+
+    if (creatingDealProposalIdsRef.current.has(proposal.id)) {
+      return;
+    }
+
+    creatingDealProposalIdsRef.current.add(proposal.id);
+    appendLine('success', `Proposal ${proposal.id} accepted. Opening wallet to create the on-chain deal...`);
+
+    try {
+      const createdDeal = await createDealForAcceptedProposal({
+        walletClient,
+        agentAddress: address.toLowerCase(),
+        jobId: activeJobId,
+        proposal,
+      });
+
+      appendLine('agent', `Debug createDeal connected account: ${createdDeal.connectedAccount}`);
+      appendLine('agent', `Debug DealCreated payer: ${createdDeal.payer}`);
+      appendLine('agent', `Debug /deals x-agent-address: ${createdDeal.mirrorHeaderAddress}`);
+      appendLine(
+        'success',
+        `Deal #${createdDeal.dealId} created on-chain and mirrored to the API. Tx: ${createdDeal.txHash}`,
+      );
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Unknown error';
+      appendLine('agent', `createDeal() failed for accepted proposal ${proposal.id}: ${message}`);
+    }
+  };
+
   useEffect(() => {
     if (!activeJobId) {
       setProposals([]);
@@ -243,8 +273,8 @@ export function TerminalComposer() {
           const currentStatus = proposal.status;
           const previousStatus = nextStatuses.get(proposal.id);
           if (!nextSeen.has(proposal.id)) {
-            const workerAddress = proposal.worker_address ?? proposal.workerAddress ?? 'unknown-worker';
-            const workerLabel = proposal.worker?.ens_name ?? proposal.worker?.ensName ?? formatAddress(workerAddress);
+      const workerAddress = proposal.worker_address ?? proposal.workerAddress ?? 'unknown-worker';
+      const workerLabel = proposal.worker?.ens_name ?? proposal.worker?.ensName ?? formatAddress(workerAddress);
             const price = proposal.proposed_price ?? proposal.proposedPrice ?? '0';
             appendLine('agent', `${workerLabel} submitted proposal ${proposal.id} for ${formatWeiAsEth(price)}.`);
             appendLine('agent', `Review proposal ${proposal.id} below and accept it to continue negotiation.`);
@@ -254,6 +284,7 @@ export function TerminalComposer() {
               appendLine('agent', `Proposal ${proposal.id} was countered. You can still accept the counter-offer below.`);
             } else if (currentStatus === 'accepted') {
               appendLine('success', `Proposal ${proposal.id} is now accepted.`);
+              appendLine('agent', `Use the Create deal button below proposal ${proposal.id} to call createDeal() on-chain.`);
             } else if (currentStatus === 'rejected') {
               appendLine('agent', `Proposal ${proposal.id} was rejected.`);
             }
@@ -289,7 +320,11 @@ export function TerminalComposer() {
     appendLine('agent', `Evaluating proposal ${proposal.id}...`);
 
     try {
-      const evaluation = await evaluateProposal(activeJobId, proposal.id);
+      if (!address) {
+        throw new Error('Connect the task-agent wallet before evaluating proposals.');
+      }
+
+      const evaluation = await evaluateProposal(activeJobId, proposal.id, address.toLowerCase());
       appendLine('agent', `NegotiationEngine decision for ${proposal.id}: ${evaluation.decision}.`);
       appendLine('agent', evaluation.reasoning);
 
@@ -297,7 +332,8 @@ export function TerminalComposer() {
       setProposals(response.proposals);
 
       if (evaluation.decision === 'accept') {
-        appendLine('success', `Proposal ${proposal.id} accepted. The job is now locked to the selected worker.`);
+        appendLine('success', `Proposal ${proposal.id} accepted.`);
+        appendLine('agent', `Create the on-chain deal from the accepted proposal card below.`);
       } else if (evaluation.decision === 'counter') {
         appendLine('agent', `Proposal ${proposal.id} was countered. Review the updated negotiation state.`);
       } else {
@@ -334,33 +370,58 @@ export function TerminalComposer() {
     try {
       let signedDelegation = null;
       const payload = buildJobPayload(command, attachments);
-      if (!connectedAsTaskAgent && canSignDelegation()) {
-        if (wrongChain) {
-          throw new Error(`Switch your wallet to ${DEALFORGE_CHAIN_NAME} before posting this job.`);
-        }
+      if (!walletClient) {
+        throw new Error('Wallet client unavailable. Reconnect your wallet and try again.');
+      }
 
+      if (wrongChain) {
+        throw new Error(`Switch your wallet to ${DEALFORGE_CHAIN_NAME} before posting this job.`);
+      }
+
+      if (!isVerifiedWallet(address)) {
+        appendLine('agent', `Requesting auth challenge for ${formatAddress(address)}...`);
+        const auth = await verifyWalletOwnership(address, walletClient);
+        if (!auth.verified) {
+          throw new Error('Wallet verification failed.');
+        }
+        enqueueLines([{ kind: 'success', text: 'Wallet ownership verified with DealForge.' }]);
+      }
+
+      appendLine('agent', `Registering ${formatAddress(address)} as the task agent...`);
+      await registerAgent(address.toLowerCase(), {
+        capabilities: ['task-orchestration', 'deal-negotiation', 'escrow-funding'],
+        pricing_policy: {
+          min_price_wei: '0',
+          max_price_wei: payload.max_budget,
+          preferred_deadline_hours: 24,
+        },
+        description: 'Frontend task agent profile used for job posting and proposal management.',
+      });
+      enqueueLines([{ kind: 'success', text: 'Task agent profile registered.' }]);
+
+      if (canSignDelegation(address)) {
         appendLine(
           'agent',
-          `Opening your wallet to authorize task agent ${formatAddress(DEALFORGE_AGENT_ADDRESS)} to spend up to ${payload.max_budget} wei through DelegationManager...`,
+          `Opening your wallet to authorize task agent ${formatAddress(address)} to spend up to ${formatWeiAsEth(payload.max_budget)} through DelegationManager...`,
         );
         signedDelegation = await signEscrowFundingDelegation({
           userAddress: address,
+          delegateAddress: address.toLowerCase(),
           maxAmountWei: BigInt(payload.max_budget),
         });
         if (!signedDelegation) {
           throw new Error('Delegation signing is not configured in this frontend environment.');
         }
-        enqueueLines([
-          { kind: 'success', text: 'Budget delegation signed by the connected wallet.' },
-        ]);
+        enqueueLines([{ kind: 'success', text: 'Budget delegation signed by the connected wallet.' }]);
       }
 
-      appendLine('agent', `Posting job through task agent ${formatAddress(DEALFORGE_AGENT_ADDRESS)}...`);
+      appendLine('agent', `Posting job through task agent ${formatAddress(address)}...`);
       const createdJob = await createJob(
         {
           ...payload,
           ...(signedDelegation ? { delegation: signedDelegation.delegation as never } : {}),
         },
+        address.toLowerCase(),
       );
       const resolvedJobId = createdJob.id ?? 'pending-id';
       setActiveJobId(createdJob.id ?? null);
@@ -475,7 +536,7 @@ export function TerminalComposer() {
             </span>
           </div>
           <p className="delegation-lead">
-            Worker proposals appear here as they are submitted. Accepting a proposal calls the NegotiationEngine evaluation endpoint for this job.
+            Worker proposals appear here as they are submitted. Accepting a proposal calls the NegotiationEngine evaluation endpoint for this job with the connected task-agent wallet.
           </p>
           {proposalState === 'loading' ? <div className="result-state">Waiting for worker proposals...</div> : null}
           {proposalState === 'error' ? (
@@ -506,24 +567,35 @@ export function TerminalComposer() {
                       <span>Deadline {String(deadline)}</span>
                     </div>
                     <p className="delegation-lead">{proposal.message}</p>
-                    {proposal.status === 'pending' || proposal.status === 'countered' ? (
-                      <div className="deal-actions">
-                        <button
-                          type="button"
+                          {proposal.status === 'pending' || proposal.status === 'countered' ? (
+                            <div className="deal-actions">
+                              <button
+                                type="button"
                           className="button button-primary"
                           onClick={() => void onAcceptProposal(proposal)}
                           disabled={evaluatingProposalId === proposal.id}
                         >
-                          {evaluatingProposalId === proposal.id
-                            ? 'Evaluating...'
-                            : proposal.status === 'countered'
-                              ? 'Accept counter-offer'
-                              : 'Accept proposal'}
-                        </button>
-                      </div>
-                    ) : null}
-                  </article>
-                );
+                                {evaluatingProposalId === proposal.id
+                                  ? 'Evaluating...'
+                                  : proposal.status === 'countered'
+                                    ? 'Accept counter-offer'
+                                    : 'Accept proposal'}
+                              </button>
+                            </div>
+                          ) : proposal.status === 'accepted' ? (
+                            <div className="deal-actions">
+                              <button
+                                type="button"
+                                className="button button-primary"
+                                onClick={() => void createDealFromAcceptedProposal(proposal)}
+                                disabled={creatingDealProposalIdsRef.current.has(proposal.id)}
+                              >
+                                {creatingDealProposalIdsRef.current.has(proposal.id) ? 'Creating deal...' : 'Create deal'}
+                              </button>
+                            </div>
+                          ) : null}
+                        </article>
+                      );
               })}
             </div>
           ) : null}
