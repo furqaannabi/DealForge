@@ -62,11 +62,20 @@ app.use((_req, res) => {
   res.status(404).json({ error: 'Not found' });
 });
 
-// ─── Error handler ────────────────────────────────────────────────────────────
+// ─── Global error handler ────────────────────────────────────────────────────
+// Catches anything forwarded via next(err) — including errors from asyncHandler.
+// Must be defined AFTER all routes.
 
 app.use((err: Error, _req: express.Request, res: express.Response, _next: express.NextFunction) => {
-  console.error(err);
-  res.status(500).json({ error: 'Internal server error', message: err.message });
+  const status = (err as NodeJS.ErrnoException & { status?: number }).status ?? 500;
+  console.error(`[ERROR] ${new Date().toISOString()}`, err.name, err.message);
+  if (config.NODE_ENV !== 'production') console.error(err.stack);
+  if (res.headersSent) return;
+  res.status(status).json({
+    error: err.name ?? 'InternalServerError',
+    message: err.message,
+    ...(config.NODE_ENV !== 'production' ? { stack: err.stack } : {}),
+  });
 });
 
 // ─── HTTP + WebSocket server ──────────────────────────────────────────────────
@@ -97,6 +106,23 @@ async function main() {
   };
   process.on('SIGTERM', shutdown);
   process.on('SIGINT', shutdown);
+
+  // ── Process-level safety nets ──────────────────────────────────────────────
+  // These prevent a single uncaught error from killing the entire server process.
+  // The asyncHandler wrapper handles route-level errors; these catch anything else
+  // (e.g. event-indexer callbacks, background timers, WebSocket handlers).
+
+  process.on('unhandledRejection', (reason) => {
+    console.error(`[UNHANDLED REJECTION] ${new Date().toISOString()}`, reason);
+    // Do NOT exit — just log. PM2 / systemd will restart if truly fatal.
+  });
+
+  process.on('uncaughtException', (err) => {
+    console.error(`[UNCAUGHT EXCEPTION] ${new Date().toISOString()}`, err);
+    // Uncaught exceptions leave the process in an unknown state.
+    // Shut down gracefully so PM2 can restart with a clean slate.
+    shutdown();
+  });
 }
 
 main().catch((err) => {
