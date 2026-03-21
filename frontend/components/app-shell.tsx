@@ -8,6 +8,7 @@ import { useAccount } from 'wagmi';
 
 const navItems = [
   { href: '/', label: 'Dashboard' },
+  { href: '/my-jobs', label: 'My Jobs' },
   { href: '/tasks', label: 'Tasks' },
   { href: '/post-job', label: 'Post Job' },
   { href: '/deals', label: 'Deals' },

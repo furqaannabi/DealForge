@@ -3,6 +3,8 @@ export type ApiDealStatus = 'CREATED' | 'ACTIVE' | 'SUBMITTED' | 'SETTLED' | 'RE
 
 export interface ApiJob {
   id: string;
+  posterAddress?: string;
+  poster_address?: string;
   title: string;
   description: string;
   maxBudget?: string;
