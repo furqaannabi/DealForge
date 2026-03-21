@@ -3,8 +3,12 @@ export type ApiDealStatus = 'CREATED' | 'ACTIVE' | 'SUBMITTED' | 'SETTLED' | 'RE
 
 export interface ApiJob {
   id: string;
+  posterAddress?: string;
+  poster_address?: string;
   title: string;
   description: string;
+  taskDescriptionCid?: string | null;
+  task_description_cid?: string | null;
   maxBudget?: string;
   max_budget?: string;
   deadline: string | number;
@@ -174,5 +178,5 @@ export interface AgentRegistrationRequest {
     preferred_deadline_hours: number;
   };
   description: string;
-  ens_name: string;
+  ens_name?: string;
 }

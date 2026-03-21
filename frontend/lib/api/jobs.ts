@@ -5,16 +5,27 @@ import type {
   ProposalEvaluationResponse,
   ProposalsListResponse,
 } from '@/lib/types/api';
-import { DEMO_AGENT_ADDRESS } from '@/lib/config';
 import { apiRequest } from './http';
 
-// Omitting status returns all jobs. Pass "open" when a screen only wants the public task board.
-export async function listJobs(status?: string) {
-  const query = status ? `?status=${encodeURIComponent(status)}` : '';
-  return apiRequest<JobsListResponse>(`/jobs${query}`);
+interface ListJobsParams {
+  status?: string;
+  limit?: number;
+  offset?: number;
 }
 
-export async function createJob(payload: CreateJobRequest, agentAddress = DEMO_AGENT_ADDRESS) {
+// Omitting status returns all jobs. Pass "open" when a screen only wants the public task board.
+export async function listJobs(params: ListJobsParams = {}) {
+  const query = new URLSearchParams();
+
+  if (params.status) query.set('status', params.status);
+  if (typeof params.limit === 'number') query.set('limit', String(params.limit));
+  if (typeof params.offset === 'number') query.set('offset', String(params.offset));
+
+  const suffix = query.toString();
+  return apiRequest<JobsListResponse>(suffix ? `/jobs?${suffix}` : '/jobs');
+}
+
+export async function createJob(payload: CreateJobRequest, agentAddress: string) {
   return apiRequest<ApiJob>('/jobs', {
     method: 'POST',
     headers: {
@@ -28,10 +39,14 @@ export async function listJobProposals(jobId: string) {
   return apiRequest<ProposalsListResponse>(`/jobs/${jobId}/proposals`);
 }
 
+export async function getJob(jobId: string) {
+  return apiRequest<ApiJob>(`/jobs/${jobId}`);
+}
+
 export async function evaluateProposal(
   jobId: string,
   proposalId: string,
-  agentAddress = DEMO_AGENT_ADDRESS,
+  agentAddress: string,
 ) {
   return apiRequest<ProposalEvaluationResponse>(`/jobs/${jobId}/proposals/${proposalId}/evaluate`, {
     method: 'POST',

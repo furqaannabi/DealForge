@@ -1,5 +1,6 @@
 import type {
   AttachDealDelegationResponse,
+  ApiDeal,
   DealsListResponse,
   ApiDelegation,
 } from '@/lib/types/api';
@@ -39,5 +40,23 @@ export async function attachDealDelegation(
       'x-agent-address': agentAddress,
     },
     body: JSON.stringify({ delegation }),
+  });
+}
+
+export async function mirrorDeal(
+  payload: {
+    deal_id: number;
+    tx_hash: string;
+    job_id?: string;
+    task_cid?: string;
+  },
+  agentAddress: string,
+) {
+  return apiRequest<ApiDeal>('/deals', {
+    method: 'POST',
+    headers: {
+      'x-agent-address': agentAddress,
+    },
+    body: JSON.stringify(payload),
   });
 }

@@ -1,4 +1,3 @@
-import { DEMO_AGENT_ADDRESS } from '@/lib/config';
 import type {
   AgentDealsResponse,
   AgentRegistrationRequest,
@@ -20,19 +19,6 @@ export async function registerAgent(address: string, payload: AgentRegistrationR
   });
 }
 
-export async function ensureDemoAgentRegistered(address = DEMO_AGENT_ADDRESS) {
-  return registerAgent(address, {
-    capabilities: ['data-analysis', 'python', 'web-scraping'],
-    pricing_policy: {
-      min_price_wei: '10000000000000000',
-      max_price_wei: '1000000000000000000',
-      preferred_deadline_hours: 24,
-    },
-    description: 'Frontend demo task agent wired to the DealForge coordination API.',
-    ens_name: 'myagent.eth',
-  });
-}
-
-export async function getAgentDeals(address = DEMO_AGENT_ADDRESS) {
+export async function getAgentDeals(address: string) {
   return apiRequest<AgentDealsResponse>(`/agents/${address}/deals`);
 }

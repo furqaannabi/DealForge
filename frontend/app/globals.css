@@ -830,6 +830,17 @@ textarea {
   gap: 16px;
 }
 
+.my-jobs-grid {
+  display: grid;
+  gap: 16px;
+}
+
+.proposal-job-card {
+  padding: 20px;
+  display: grid;
+  gap: 14px;
+}
+
 .deal-pagination,
 .deal-pagination-actions {
   display: flex;

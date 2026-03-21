@@ -36,7 +36,7 @@ export function DashboardOverview() {
       try {
         const [healthResponse, jobsResponse, agentsResponse, dealsResponse] = await Promise.all([
           getHealth(),
-          listJobs('open'),
+          listJobs({ status: 'open' }),
           listAgents(),
           listDeals({ limit: 50 }),
         ]);
