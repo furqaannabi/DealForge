@@ -42,6 +42,7 @@ export function getProvider(): ethers.JsonRpcProvider {
 
 export function getContract(): ethers.Contract {
   const address = config.DEALFORGE_CONTRACT_ADDRESS;
+  console.log(`[getContract] address=${address}`);
   if (!address) throw new Error('DEALFORGE_CONTRACT_ADDRESS is not set in environment');
   return new ethers.Contract(address, DEALFORGE_ABI, getProvider());
 }
@@ -73,7 +74,9 @@ export interface OnChainDeal {
 
 export async function getDealOnChain(dealId: bigint): Promise<OnChainDeal> {
   const contract = getContract();
+  console.log(`[getDealOnChain] dealId=${dealId}`);
   const d = await contract.getDeal(dealId);
+  console.log(`[getDealOnChain] d=${JSON.stringify(d)}`);
   return {
     id: BigInt(d.id),
     payer: d.payer.toLowerCase(),
