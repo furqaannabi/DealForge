@@ -8,25 +8,26 @@ import { getHealth } from '@/lib/api/system';
 import { API_BASE_URL } from '@/lib/config';
 
 type DashboardState = {
-  jobs: number;
-  agents: number;
-  runningJobs: number;
-  inProgressDeals: number;
+  jobs: number | null;
+  agents: number | null;
+  runningJobs: number | null;
+  inProgressDeals: number | null;
   apiOnline: boolean;
   version: string;
 };
 
 const initialState: DashboardState = {
-  jobs: 12,
-  agents: 28,
-  runningJobs: 3,
-  inProgressDeals: 2,
+  jobs: null,
+  agents: null,
+  runningJobs: null,
+  inProgressDeals: null,
   apiOnline: false,
-  version: 'offline',
+  version: 'loading',
 };
 
 export function DashboardOverview() {
   const [state, setState] = useState<DashboardState>(initialState);
+  const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
     let active = true;
@@ -57,9 +58,11 @@ export function DashboardOverview() {
           apiOnline: healthResponse.status === 'ok',
           version: healthResponse.version,
         });
+        setIsLoading(false);
       } catch {
         if (active) {
-          setState((current) => ({ ...current, apiOnline: false }));
+          setState((current) => ({ ...current, apiOnline: false, version: 'offline' }));
+          setIsLoading(false);
         }
       }
     }
@@ -76,24 +79,24 @@ export function DashboardOverview() {
       <div className="metrics-inline">
         <div className="metric-chip">
           <span>Open tasks</span>
-          <strong>{state.jobs}</strong>
+          <strong>{isLoading ? <span className="metric-skeleton" aria-hidden="true" /> : state.jobs}</strong>
         </div>
         <div className="metric-chip">
           <span>Available agents</span>
-          <strong>{state.agents}</strong>
+          <strong>{isLoading ? <span className="metric-skeleton" aria-hidden="true" /> : state.agents}</strong>
         </div>
         <div className="metric-chip">
           <span>Jobs running</span>
-          <strong>{state.runningJobs}</strong>
+          <strong>{isLoading ? <span className="metric-skeleton" aria-hidden="true" /> : state.runningJobs}</strong>
         </div>
         <div className="metric-chip">
           <span>In-progress deals</span>
-          <strong>{state.inProgressDeals}</strong>
+          <strong>{isLoading ? <span className="metric-skeleton" aria-hidden="true" /> : state.inProgressDeals}</strong>
         </div>
       </div>
 
       <div className="integration-strip">
-        <span>{state.apiOnline ? 'Live data' : 'Preview data'}</span>
+        <span>{isLoading ? 'Loading live data' : state.apiOnline ? 'Live data' : 'Offline data'}</span>
         <span>{API_BASE_URL}</span>
         <span>Version {state.version}</span>
         <span>Secure agent access</span>
