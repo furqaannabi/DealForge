@@ -2,6 +2,7 @@ import { Router } from 'express';
 import { z } from 'zod';
 import { db } from '../db/client';
 import { requireAuth } from '../middleware/auth';
+import { asyncHandler } from '../middleware/asyncHandler';
 
 const router = Router();
 
@@ -20,7 +21,7 @@ const registerSchema = z.object({
 
 // ─── GET /agents/:address — Get agent profile ────────────────────────────────
 
-router.get('/:address', async (req, res) => {
+router.get('/:address', asyncHandler(async (req, res) => {
   const agent = await db.agent.findUnique({
     where: { address: req.params.address.toLowerCase() },
     select: {
@@ -37,11 +38,11 @@ router.get('/:address', async (req, res) => {
 
   if (!agent) { res.status(404).json({ error: 'Agent not found' }); return; }
   res.json(agent);
-});
+}));
 
 // ─── GET /agents — List agents (with optional capability filter) ─────────────
 
-router.get('/', async (req, res) => {
+router.get('/', asyncHandler(async (req, res) => {
   const { capability, limit = '20', offset = '0' } = req.query as Record<string, string>;
 
   const agents = await db.agent.findMany({
@@ -60,11 +61,11 @@ router.get('/', async (req, res) => {
   });
 
   res.json({ agents });
-});
+}));
 
 // ─── POST /agents — Register or update an agent ──────────────────────────────
 
-router.post('/', requireAuth, async (req, res) => {
+router.post('/', requireAuth, asyncHandler(async (req, res) => {
   const parsed = registerSchema.safeParse(req.body);
   if (!parsed.success) { res.status(400).json({ error: parsed.error.flatten() }); return; }
 
@@ -89,21 +90,21 @@ router.post('/', requireAuth, async (req, res) => {
   });
 
   res.status(201).json(agent);
-});
+}));
 
 // ─── PATCH /agents/me/heartbeat — Update last_seen ──────────────────────────
 
-router.patch('/me/heartbeat', requireAuth, async (req, res) => {
+router.patch('/me/heartbeat', requireAuth, asyncHandler(async (req, res) => {
   await db.agent.update({
     where: { address: req.agentAddress! },
     data: { lastSeen: new Date() },
   });
   res.json({ ok: true });
-});
+}));
 
 // ─── GET /agents/:address/deals — Deal history for reputation ────────────────
 
-router.get('/:address/deals', async (req, res) => {
+router.get('/:address/deals', asyncHandler(async (req, res) => {
   const addr = req.params.address.toLowerCase();
 
   const [asPayer, asWorker] = await Promise.all([
@@ -131,6 +132,6 @@ router.get('/:address/deals', async (req, res) => {
     deals_as_payer: asPayer,
     deals_as_worker: asWorker,
   });
-});
+}));
 
 export default router;

@@ -7,6 +7,7 @@ import { requireEvaluationPayment, requireMatchesPayment } from '../middleware/p
 import { evaluateProposal } from '../services/negotiation-engine';
 import { uploadTaskDescription } from '../services/ipfs';
 import { findMatches } from '../services/matchmaker';
+import { asyncHandler } from '../middleware/asyncHandler';
 
 const router = Router();
 
@@ -45,7 +46,7 @@ const delegationSchema = z.object({
 
 // ─── GET /jobs  ───────────────────────────────────────────────────
 
-router.get('/', async (req, res) => {
+router.get('/', asyncHandler(async (req, res) => {
   const {
     category,
     status,
@@ -70,11 +71,11 @@ router.get('/', async (req, res) => {
   ]);
 
   res.json({ jobs, total, limit: parseInt(limit, 10), offset: parseInt(offset, 10) });
-});
+}));
 
 // ─── GET /jobs/:id — ───────────────────────────────────────────────
 
-router.get('/:id', async (req, res) => {
+router.get('/:id', asyncHandler(async (req, res) => {
   const job = await db.job.findUnique({
     where: { id: req.params.id },
     include: {
@@ -85,11 +86,11 @@ router.get('/:id', async (req, res) => {
 
   if (!job) { res.status(404).json({ error: 'Job not found' }); return; }
   res.json({ ...job, proposal_count: job._count.proposals });
-});
+}));
 
 // ─── POST /jobs — optionally stores a signed funding delegation ────────
 
-router.post('/', requireAuth, async (req, res) => {
+router.post('/', requireAuth, asyncHandler(async (req, res) => {
   const parsed = postJobSchema.safeParse(req.body);
   if (!parsed.success) { res.status(400).json({ error: parsed.error.flatten() }); return; }
 
@@ -138,32 +139,32 @@ router.post('/', requireAuth, async (req, res) => {
     await db.job.delete({ where: { id: job.id } }).catch(() => undefined);
     res.status(502).json({ error: 'Failed to upload task description to IPFS', detail: String(err) });
   }
-});
+}));
 
 // ─── GET /jobs/:id/matches  ──────────────────────────────────────
 
-router.get('/:id/matches', requireMatchesPayment, async (req, res) => {
+router.get('/:id/matches', requireMatchesPayment, asyncHandler(async (req, res) => {
   const job = await db.job.findUnique({ where: { id: req.params.id } });
   if (!job) { res.status(404).json({ error: 'Job not found' }); return; }
 
   const matches = await findMatches(job);
   res.json({ matches });
-});
+}));
 
 // ─── GET /jobs/:id/proposals  ────────────────────────────────────
 
-router.get('/:id/proposals', async (req, res) => {
+router.get('/:id/proposals', asyncHandler(async (req, res) => {
   const proposals = await db.proposal.findMany({
     where: { jobId: req.params.id },
     include: { worker: { select: { ensName: true, reputationScore: true } } },
     orderBy: { createdAt: 'desc' },
   });
   res.json({ proposals });
-});
+}));
 
 // ─── POST /jobs/:id/proposals  ───────────────────────────────────
 
-router.post('/:id/proposals', requireAuth, async (req, res) => {
+router.post('/:id/proposals', requireAuth, asyncHandler(async (req, res) => {
   const parsed = proposalSchema.safeParse(req.body);
   if (!parsed.success) { res.status(400).json({ error: parsed.error.flatten() }); return; }
 
@@ -180,6 +181,10 @@ router.post('/:id/proposals', requireAuth, async (req, res) => {
 
   const { proposed_price, proposed_deadline, message } = parsed.data;
 
+  // Use updateMany so that a second proposal on an already-negotiating job
+  // doesn't throw P2025 ("record not found for update"). The status
+  // transition open→negotiating is idempotent — if already negotiating we
+  // just leave it as-is (updateMany returns count=0 silently instead of throwing).
   const [proposal] = await db.$transaction([
     db.proposal.create({
       data: {
@@ -190,18 +195,18 @@ router.post('/:id/proposals', requireAuth, async (req, res) => {
         message,
       },
     }),
-    db.job.update({
-      where: { id: req.params.id, status: JobStatus.open },
+    db.job.updateMany({
+      where: { id: req.params.id, status: { in: [JobStatus.open, JobStatus.negotiating] } },
       data: { status: JobStatus.negotiating },
     }),
   ]);
 
   res.status(201).json(proposal);
-});
+}));
 
 // ─── POST /jobs/:id/proposals/:pid/evaluate  ───────────────────────
 
-router.post('/:id/proposals/:pid/evaluate', requireAuth, requireEvaluationPayment, async (req, res) => {
+router.post('/:id/proposals/:pid/evaluate', requireAuth, requireEvaluationPayment, asyncHandler(async (req, res) => {
   const [job, proposal] = await Promise.all([
     db.job.findUnique({ where: { id: req.params.id } }),
     db.proposal.findUnique({ where: { id: req.params.pid } }),
@@ -235,12 +240,12 @@ router.post('/:id/proposals/:pid/evaluate', requireAuth, requireEvaluationPaymen
   });
 
   res.json(evaluation);
-});
+}));
 
 // ─── GET /jobs/:id/delegation — fetch stored funding delegation ────────
 // The task agent uses this when preparing DelegationManager.redeemDelegations().
 
-router.get('/:id/delegation', requireAuth, async (req, res) => {
+router.get('/:id/delegation', requireAuth, asyncHandler(async (req, res) => {
   const job = await db.job.findUnique({ where: { id: req.params.id } });
   if (!job) { res.status(404).json({ error: 'Job not found' }); return; }
 
@@ -251,6 +256,6 @@ router.get('/:id/delegation', requireAuth, async (req, res) => {
   }
 
   res.json({ delegation });
-});
+}));
 
 export default router;

@@ -6,6 +6,7 @@ import { requireAuth } from '../middleware/auth';
 import { getDealOnChain, syncDealToDb } from '../services/contract';
 import { uploadRawResult } from '../services/ipfs';
 import { config } from '../config';
+import { asyncHandler } from '../middleware/asyncHandler';
 
 const router = Router();
 
@@ -37,7 +38,7 @@ const delegationSchema = z.object({
 
 // ─── GET /deals — List deals (from DB) ───────────────────────────────────────
 
-router.get('/', async (req, res) => {
+router.get('/', asyncHandler(async (req, res) => {
   const { status, payer, worker, limit = '20', offset = '0' } = req.query as Record<string, string>;
 
   const where = {
@@ -58,11 +59,11 @@ router.get('/', async (req, res) => {
   ]);
 
   res.json({ deals, total, limit: parseInt(limit, 10), offset: parseInt(offset, 10) });
-});
+}));
 
 // ─── GET /deals/:dealId — Get deal (DB + optional on-chain sync) ─────────────
 
-router.get('/:dealId', async (req, res) => {
+router.get('/:dealId', asyncHandler(async (req, res) => {
   const dealId = parseDealId(req.params.dealId);
   if (dealId === null) { res.status(400).json({ error: "Invalid dealId" }); return; }
   const sync = req.query.sync === 'true';
@@ -87,11 +88,11 @@ router.get('/:dealId', async (req, res) => {
 
   if (!deal) { res.status(404).json({ error: 'Deal not found' }); return; }
   res.json(deal);
-});
+}));
 
 // ─── GET /deals/:dealId/chain — Read directly from chain ─────────────────────
 
-router.get('/:dealId/chain', async (req, res) => {
+router.get('/:dealId/chain', asyncHandler(async (req, res) => {
   if (!config.DEALFORGE_CONTRACT_ADDRESS) {
     res.status(503).json({ error: 'Contract address not configured' });
     return;
@@ -115,7 +116,7 @@ router.get('/:dealId/chain', async (req, res) => {
     created_at: onChain.createdAt.toString(),
     submitted_at: onChain.submittedAt.toString(),
   });
-});
+}));
 
 // ─── POST /deals — Mirror on-chain deal into DB ───────────────────────────────
 //
@@ -123,7 +124,7 @@ router.get('/:dealId/chain', async (req, res) => {
 // Fetches authoritative data from chain; only `tx_hash` (and optional `job_id`)
 // are accepted from the request body.
 
-router.post('/', requireAuth, async (req, res) => {
+router.post('/', requireAuth, asyncHandler(async (req, res) => {
   const parsed = mirrorDealSchema.safeParse(req.body);
   if (!parsed.success) { res.status(400).json({ error: parsed.error.flatten() }); return; }
 
@@ -195,11 +196,11 @@ router.post('/', requireAuth, async (req, res) => {
   }
 
   res.status(201).json(deal);
-});
+}));
 
 // ─── PATCH /deals/:dealId — Update taskCid (payer only) ──────────────────────
 
-router.patch('/:dealId', requireAuth, async (req, res) => {
+router.patch('/:dealId', requireAuth, asyncHandler(async (req, res) => {
   const dealId = parseDealId(req.params.dealId);
   if (dealId === null) { res.status(400).json({ error: "Invalid dealId" }); return; }
   const deal = await db.deal.findUnique({ where: { dealId } });
@@ -214,9 +215,9 @@ router.patch('/:dealId', requireAuth, async (req, res) => {
 
   const updated = await db.deal.update({ where: { dealId }, data: { taskCid: task_cid } as never });
   res.json(updated);
-});
+}));
 
-router.post('/:dealId/delegation', requireAuth, async (req, res) => {
+router.post('/:dealId/delegation', requireAuth, asyncHandler(async (req, res) => {
   const parsed = delegationSchema.safeParse(req.body.delegation);
   if (!parsed.success) { res.status(400).json({ error: parsed.error.flatten() }); return; }
 
@@ -252,11 +253,11 @@ router.post('/:dealId/delegation', requireAuth, async (req, res) => {
     job_id: deal.jobId,
     delegation: parsed.data,
   });
-});
+}));
 
 // ─── POST /deals/:dealId/submit-result — Worker uploads result to IPFS ───────
 
-router.post('/:dealId/submit-result', requireAuth, async (req, res) => {
+router.post('/:dealId/submit-result', requireAuth, asyncHandler(async (req, res) => {
   const dealId = parseDealId(req.params.dealId);
   if (dealId === null) { res.status(400).json({ error: "Invalid dealId" }); return; }
 
@@ -286,11 +287,11 @@ router.post('/:dealId/submit-result', requireAuth, async (req, res) => {
   } catch (err) {
     res.status(502).json({ error: 'Failed to upload result to IPFS', detail: String(err) });
   }
-});
+}));
 
 // ─── POST /deals/:dealId/sync — Re-sync deal state from chain ────────────────
 
-router.post('/:dealId/sync', requireAuth, async (req, res) => {
+router.post('/:dealId/sync', requireAuth, asyncHandler(async (req, res) => {
   if (!config.DEALFORGE_CONTRACT_ADDRESS) {
     res.status(503).json({ error: 'Contract address not configured' });
     return;
@@ -317,6 +318,6 @@ router.post('/:dealId/sync', requireAuth, async (req, res) => {
 
   const updated = await db.deal.findUnique({ where: { dealId } });
   res.json(updated);
-});
+}));
 
 export default router;
