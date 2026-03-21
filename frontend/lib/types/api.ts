@@ -90,6 +90,43 @@ export interface ApiDelegation {
   signature: string;
 }
 
+export interface ApiProposal {
+  id: string;
+  jobId?: string;
+  job_id?: string;
+  workerAddress?: string;
+  worker_address?: string;
+  proposedPrice?: string;
+  proposed_price?: string;
+  proposedDeadline?: string | number;
+  proposed_deadline?: string | number;
+  message: string;
+  status: 'pending' | 'accepted' | 'rejected' | 'countered';
+  createdAt?: string;
+  created_at?: string;
+  worker?: {
+    ensName?: string | null;
+    ens_name?: string | null;
+    reputationScore?: number;
+    reputation_score?: number;
+  };
+}
+
+export interface ProposalsListResponse {
+  proposals: ApiProposal[];
+}
+
+export interface ProposalEvaluationResponse {
+  decision: 'accept' | 'reject' | 'counter';
+  reasoning: string;
+  fit_score?: number;
+  counter_offer?: {
+    price_wei?: string;
+    deadline?: number;
+    message?: string;
+  } | null;
+}
+
 export interface JobsListResponse {
   jobs: ApiJob[];
   total: number;
