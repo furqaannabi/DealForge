@@ -41,6 +41,15 @@ const delegationSchema = z.object({
 router.get('/', asyncHandler(async (req, res) => {
   const { status, payer, worker, limit = '20', offset = '0' } = req.query as Record<string, string>;
 
+  // Validate status against the enum
+  if (status && !Object.values(DealStatus).includes(status as DealStatus)) {
+    res.status(400).json({ error: `Invalid status '${status}'. Valid values: ${Object.values(DealStatus).join(', ')}` });
+    return;
+  }
+
+  const take = Math.min(Math.max(parseInt(limit, 10) || 20, 1), 100);
+  const skip = Math.max(parseInt(offset, 10) || 0, 0);
+
   const where = {
     ...(status ? { status: status as DealStatus } : {}),
     ...(payer ? { payer: payer.toLowerCase() } : {}),
@@ -52,13 +61,13 @@ router.get('/', asyncHandler(async (req, res) => {
       where,
       include: { job: { select: { title: true, category: true } } },
       orderBy: { createdAt: 'desc' },
-      take: parseInt(limit, 10),
-      skip: parseInt(offset, 10),
+      take,
+      skip,
     }),
     db.deal.count({ where }),
   ]);
 
-  res.json({ deals, total, limit: parseInt(limit, 10), offset: parseInt(offset, 10) });
+  res.json({ deals, total, limit: take, offset: skip });
 }));
 
 // ─── GET /deals/:dealId — Get deal (DB + optional on-chain sync) ─────────────
