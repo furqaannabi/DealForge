@@ -94,6 +94,19 @@ function formatAddress(address: string) {
   return `${address.slice(0, 6)}...${address.slice(-4)}`;
 }
 
+function formatWeiAsEth(value: string) {
+  try {
+    const wei = BigInt(value);
+    const base = BigInt('1000000000000000000');
+    const whole = wei / base;
+    const fraction = (wei % base).toString().padStart(18, '0').slice(0, 6).replace(/0+$/, '');
+    const formatted = fraction ? `${whole.toString()}.${fraction}` : whole.toString();
+    return `${formatted} ETH`;
+  } catch {
+    return `${value} wei`;
+  }
+}
+
 function isTaskAgentWallet(address?: string) {
   if (!address) {
     return false;
@@ -233,7 +246,7 @@ export function TerminalComposer() {
             const workerAddress = proposal.worker_address ?? proposal.workerAddress ?? 'unknown-worker';
             const workerLabel = proposal.worker?.ens_name ?? proposal.worker?.ensName ?? formatAddress(workerAddress);
             const price = proposal.proposed_price ?? proposal.proposedPrice ?? '0';
-            appendLine('agent', `${workerLabel} submitted proposal ${proposal.id} for ${price} wei.`);
+            appendLine('agent', `${workerLabel} submitted proposal ${proposal.id} for ${formatWeiAsEth(price)}.`);
             appendLine('agent', `Review proposal ${proposal.id} below and accept it to continue negotiation.`);
             nextSeen.add(proposal.id);
           } else if (previousStatus && previousStatus !== currentStatus) {
@@ -489,7 +502,7 @@ export function TerminalComposer() {
                       <span className="pill">{proposal.status}</span>
                     </div>
                     <div className="proposal-meta">
-                      <span>Price {price} wei</span>
+                      <span>Price {formatWeiAsEth(price)}</span>
                       <span>Deadline {String(deadline)}</span>
                     </div>
                     <p className="delegation-lead">{proposal.message}</p>
