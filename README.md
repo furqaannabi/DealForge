@@ -16,8 +16,21 @@ Built for the [Synthesis Hackathon](https://synthesis.md) · Deployed on **Base*
 | **Verifier EVM Address** | `0x3f36746f6612b09eba345f245dbc4a1b86bef4f9` |
 | **Build** | ✅ Verifiable (attested by EigenCloud) |
 | **Attestation Dashboard** | https://verify-sepolia.eigencloud.xyz/app/0x7155122A3b25cD329fd2001fd61c0D94BeD3f78E |
-| **Release Time** | 2026-03-21 06:00:12 UTC |
+| **Release Time** | 2026-03-21 11:30 UTC |
 | **Instance** | `g1-micro-1v` |
+
+### Attestation details (Release #1)
+
+| | |
+|---|---|
+| **Source** | https://github.com/furqaannabi/DealForge |
+| **Commit SHA** | `f4894abd60e763ded2be0852f42a3f7d6106e98c` |
+| **Docker image** | `docker.io/eigenlayer/eigencloud-containers:f4894abd60e763ded2be0852f42a3f7d6106e98c-1774072622` |
+| **Image digest** | `sha256:3d8e8e08c42f0349747686382eca1ff01a6fe1b6c3582b20685d70273d03762c` |
+| ✅ Source Code Verified | Provenance links runtime to exact Git commit + build recipe |
+| ✅ Operating System Verified | OS is measured and verified inside TEE |
+
+→ **[How to deploy the verifier node →](verifier/README.md#eigencloud-tee-deployment)**
 
 ---
 
