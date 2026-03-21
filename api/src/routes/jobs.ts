@@ -54,6 +54,15 @@ router.get('/', asyncHandler(async (req, res) => {
     offset = '0',
   } = req.query as Record<string, string>;
 
+  // Validate status against the enum so Prisma never sees an invalid value
+  if (status && !Object.values(JobStatus).includes(status as JobStatus)) {
+    res.status(400).json({ error: `Invalid status '${status}'. Valid values: ${Object.values(JobStatus).join(', ')}` });
+    return;
+  }
+
+  const take = Math.min(Math.max(parseInt(limit, 10) || 20, 1), 100);
+  const skip = Math.max(parseInt(offset, 10) || 0, 0);
+
   const where = {
     ...(status ? { status: status as JobStatus } : {}),
     ...(category ? { category } : {}),
@@ -64,13 +73,13 @@ router.get('/', asyncHandler(async (req, res) => {
       where,
       include: { poster: { select: { ensName: true, reputationScore: true } } },
       orderBy: { createdAt: 'desc' },
-      take: parseInt(limit, 10),
-      skip: parseInt(offset, 10),
+      take,
+      skip,
     }),
     db.job.count({ where }),
   ]);
 
-  res.json({ jobs, total, limit: parseInt(limit, 10), offset: parseInt(offset, 10) });
+  res.json({ jobs, total, limit: take, offset: skip });
 }));
 
 // ─── GET /jobs/:id — ───────────────────────────────────────────────
