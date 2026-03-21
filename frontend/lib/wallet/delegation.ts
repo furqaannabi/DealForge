@@ -9,14 +9,14 @@ import {
 import type { ApiDelegation } from '@/lib/types/api';
 import { createPublicClient, createWalletClient, custom, getAddress, http } from 'viem';
 import { base, baseSepolia } from 'viem/chains';
-import { DEALFORGE_AGENT_ADDRESS, DEALFORGE_CHAIN_ID } from '@/lib/config';
+import { DEALFORGE_CHAIN_ID } from '@/lib/config';
 
 type Eip1193Provider = {
   request(args: { method: string; params?: unknown[] | object }): Promise<unknown>;
 };
 
-export function canSignDelegation() {
-  return Boolean(DEALFORGE_AGENT_ADDRESS);
+export function canSignDelegation(delegateAddress?: string) {
+  return Boolean(delegateAddress);
 }
 
 function getActiveChain() {
@@ -62,12 +62,14 @@ function serializeDelegation(delegation: Delegation): ApiDelegation {
 
 export async function signEscrowFundingDelegation({
   userAddress,
+  delegateAddress,
   maxAmountWei,
 }: {
   userAddress: string;
+  delegateAddress: string;
   maxAmountWei: bigint;
 }) {
-  if (!canSignDelegation()) {
+  if (!canSignDelegation(delegateAddress)) {
     return null;
   }
 
@@ -103,7 +105,7 @@ export async function signEscrowFundingDelegation({
   const delegation = createDelegation({
     environment,
     from: smartAccount.address,
-    to: DEALFORGE_AGENT_ADDRESS as `0x${string}`,
+    to: delegateAddress as `0x${string}`,
     parentDelegation: ROOT_AUTHORITY,
     scope: {
       type: 'nativeTokenTransferAmount',

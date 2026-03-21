@@ -5,7 +5,6 @@ import type {
   ProposalEvaluationResponse,
   ProposalsListResponse,
 } from '@/lib/types/api';
-import { DEMO_AGENT_ADDRESS } from '@/lib/config';
 import { apiRequest } from './http';
 
 interface ListJobsParams {
@@ -26,7 +25,7 @@ export async function listJobs(params: ListJobsParams = {}) {
   return apiRequest<JobsListResponse>(suffix ? `/jobs?${suffix}` : '/jobs');
 }
 
-export async function createJob(payload: CreateJobRequest, agentAddress = DEMO_AGENT_ADDRESS) {
+export async function createJob(payload: CreateJobRequest, agentAddress: string) {
   return apiRequest<ApiJob>('/jobs', {
     method: 'POST',
     headers: {
@@ -40,10 +39,14 @@ export async function listJobProposals(jobId: string) {
   return apiRequest<ProposalsListResponse>(`/jobs/${jobId}/proposals`);
 }
 
+export async function getJob(jobId: string) {
+  return apiRequest<ApiJob>(`/jobs/${jobId}`);
+}
+
 export async function evaluateProposal(
   jobId: string,
   proposalId: string,
-  agentAddress = DEMO_AGENT_ADDRESS,
+  agentAddress: string,
 ) {
   return apiRequest<ProposalEvaluationResponse>(`/jobs/${jobId}/proposals/${proposalId}/evaluate`, {
     method: 'POST',
