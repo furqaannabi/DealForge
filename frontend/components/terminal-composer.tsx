@@ -8,9 +8,10 @@ import {
   DEALFORGE_CHAIN_ID,
   DEALFORGE_CHAIN_NAME,
 } from '@/lib/config';
-import { createJob } from '@/lib/api/jobs';
+import { createJob, evaluateProposal, listJobProposals } from '@/lib/api/jobs';
 import { commandCatalog, initialTerminalLines, type TerminalLine } from '@/lib/mock-data';
 import { canSignDelegation, signEscrowFundingDelegation } from '@/lib/wallet/delegation';
+import type { ApiProposal } from '@/lib/types/api';
 
 const DEFAULT_COMMAND = 'summarize this research paper\nbudget 3 USDC\ndeadline 20 minutes';
 
@@ -20,6 +21,7 @@ type PendingTerminalLine = {
 };
 
 type WalletState = 'disconnected' | 'connected';
+type ProposalState = 'idle' | 'loading' | 'error';
 
 function buildResponse(command: string) {
   const normalized = command.toLowerCase();
@@ -130,7 +132,13 @@ export function TerminalComposer() {
   const [walletState, setWalletState] = useState<WalletState>('disconnected');
   const [walletError, setWalletError] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [activeJobId, setActiveJobId] = useState<string | null>(null);
+  const [proposals, setProposals] = useState<ApiProposal[]>([]);
+  const [proposalState, setProposalState] = useState<ProposalState>('idle');
+  const [evaluatingProposalId, setEvaluatingProposalId] = useState<string | null>(null);
   const terminalRef = useRef<HTMLDivElement>(null);
+  const seenProposalIdsRef = useRef<Set<string>>(new Set());
+  const proposalStatusesRef = useRef<Map<string, ApiProposal['status']>>(new Map());
 
   const suggestions = useMemo(() => {
     const seed = input.split('\n')[0].trim().toLowerCase();
@@ -190,6 +198,106 @@ export function TerminalComposer() {
     setLines((current) => [...current, { id: crypto.randomUUID(), kind, text }]);
   };
 
+  useEffect(() => {
+    if (!activeJobId) {
+      setProposals([]);
+      seenProposalIdsRef.current = new Set();
+      proposalStatusesRef.current = new Map();
+      setProposalState('idle');
+      return;
+    }
+
+    const jobId = activeJobId;
+    let active = true;
+
+    async function loadProposals(isInitial = false) {
+      try {
+        if (isInitial) {
+          setProposalState('loading');
+        }
+
+        const response = await listJobProposals(jobId);
+        if (!active) {
+          return;
+        }
+
+        setProposals(response.proposals);
+        setProposalState('idle');
+
+        const nextSeen = new Set(seenProposalIdsRef.current);
+        const nextStatuses = new Map(proposalStatusesRef.current);
+        for (const proposal of response.proposals) {
+          const currentStatus = proposal.status;
+          const previousStatus = nextStatuses.get(proposal.id);
+          if (!nextSeen.has(proposal.id)) {
+            const workerAddress = proposal.worker_address ?? proposal.workerAddress ?? 'unknown-worker';
+            const workerLabel = proposal.worker?.ens_name ?? proposal.worker?.ensName ?? formatAddress(workerAddress);
+            const price = proposal.proposed_price ?? proposal.proposedPrice ?? '0';
+            appendLine('agent', `${workerLabel} submitted proposal ${proposal.id} for ${price} wei.`);
+            appendLine('agent', `Review proposal ${proposal.id} below and accept it to continue negotiation.`);
+            nextSeen.add(proposal.id);
+          } else if (previousStatus && previousStatus !== currentStatus) {
+            if (currentStatus === 'countered') {
+              appendLine('agent', `Proposal ${proposal.id} was countered. You can still accept the counter-offer below.`);
+            } else if (currentStatus === 'accepted') {
+              appendLine('success', `Proposal ${proposal.id} is now accepted.`);
+            } else if (currentStatus === 'rejected') {
+              appendLine('agent', `Proposal ${proposal.id} was rejected.`);
+            }
+          }
+          nextStatuses.set(proposal.id, currentStatus);
+        }
+        seenProposalIdsRef.current = nextSeen;
+        proposalStatusesRef.current = nextStatuses;
+      } catch {
+        if (active) {
+          setProposalState('error');
+        }
+      }
+    }
+
+    void loadProposals(true);
+    const interval = window.setInterval(() => {
+      void loadProposals();
+    }, 5000);
+
+    return () => {
+      active = false;
+      window.clearInterval(interval);
+    };
+  }, [activeJobId]);
+
+  const onAcceptProposal = async (proposal: ApiProposal) => {
+    if (!activeJobId || evaluatingProposalId) {
+      return;
+    }
+
+    setEvaluatingProposalId(proposal.id);
+    appendLine('agent', `Evaluating proposal ${proposal.id}...`);
+
+    try {
+      const evaluation = await evaluateProposal(activeJobId, proposal.id);
+      appendLine('agent', `NegotiationEngine decision for ${proposal.id}: ${evaluation.decision}.`);
+      appendLine('agent', evaluation.reasoning);
+
+      const response = await listJobProposals(activeJobId);
+      setProposals(response.proposals);
+
+      if (evaluation.decision === 'accept') {
+        appendLine('success', `Proposal ${proposal.id} accepted. The job is now locked to the selected worker.`);
+      } else if (evaluation.decision === 'counter') {
+        appendLine('agent', `Proposal ${proposal.id} was countered. Review the updated negotiation state.`);
+      } else {
+        appendLine('agent', `Proposal ${proposal.id} was rejected.`);
+      }
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Unknown error';
+      appendLine('agent', `Proposal evaluation failed: ${message}`);
+    } finally {
+      setEvaluatingProposalId(null);
+    }
+  };
+
   const runCommand = async (raw: string) => {
     const command = raw.trim();
     if (!command || isSubmitting) {
@@ -242,6 +350,9 @@ export function TerminalComposer() {
         },
       );
       const resolvedJobId = createdJob.id ?? 'pending-id';
+      setActiveJobId(createdJob.id ?? null);
+      seenProposalIdsRef.current = new Set();
+      proposalStatusesRef.current = new Map();
       setAttachments([]);
 
       enqueueLines([
@@ -252,7 +363,10 @@ export function TerminalComposer() {
           : 'Job posted without a MetaMask budget delegation because delegation signing is not configured here.',
       ]);
 
-      enqueueLines(buildResponse(command));
+      enqueueLines([
+        'Watching this job for incoming worker proposals...',
+        'New proposals will appear below with an inline accept action.',
+      ]);
     } catch (error) {
       const message = error instanceof Error ? error.message : 'Unknown error';
       setWalletError(message);
@@ -331,6 +445,77 @@ export function TerminalComposer() {
           </div>
         ) : null}
       </div>
+
+      {activeJobId ? (
+        <section className="delegation-panel">
+          <div className="delegation-head">
+            <div>
+              <p className="eyebrow">Live proposals</p>
+              <h2>Job {activeJobId}</h2>
+            </div>
+            <span className="pill">
+              {proposalState === 'loading'
+                ? 'Loading proposals'
+                : proposalState === 'error'
+                  ? 'Proposal feed unavailable'
+                  : `${proposals.length} proposal${proposals.length === 1 ? '' : 's'}`}
+            </span>
+          </div>
+          <p className="delegation-lead">
+            Worker proposals appear here as they are submitted. Accepting a proposal calls the NegotiationEngine evaluation endpoint for this job.
+          </p>
+          {proposalState === 'loading' ? <div className="result-state">Waiting for worker proposals...</div> : null}
+          {proposalState === 'error' ? (
+            <div className="result-state">We couldn't refresh proposals right now.</div>
+          ) : null}
+          {proposalState !== 'error' && proposals.length === 0 ? (
+            <div className="result-state">No proposals yet. Keep this terminal open and we'll stream new submissions here.</div>
+          ) : null}
+          {proposals.length > 0 ? (
+            <div className="proposal-list">
+              {proposals.map((proposal) => {
+                const workerAddress = proposal.worker_address ?? proposal.workerAddress ?? 'unknown-worker';
+                const workerLabel = proposal.worker?.ens_name ?? proposal.worker?.ensName ?? formatAddress(workerAddress);
+                const price = proposal.proposed_price ?? proposal.proposedPrice ?? '0';
+                const deadline = proposal.proposed_deadline ?? proposal.proposedDeadline ?? 'n/a';
+
+                return (
+                  <article key={proposal.id} className="proposal-card">
+                    <div className="proposal-card-head">
+                      <div>
+                        <p className="eyebrow">Proposal {proposal.id}</p>
+                        <strong>{workerLabel}</strong>
+                      </div>
+                      <span className="pill">{proposal.status}</span>
+                    </div>
+                    <div className="proposal-meta">
+                      <span>Price {price} wei</span>
+                      <span>Deadline {String(deadline)}</span>
+                    </div>
+                    <p className="delegation-lead">{proposal.message}</p>
+                    {proposal.status === 'pending' || proposal.status === 'countered' ? (
+                      <div className="deal-actions">
+                        <button
+                          type="button"
+                          className="button button-primary"
+                          onClick={() => void onAcceptProposal(proposal)}
+                          disabled={evaluatingProposalId === proposal.id}
+                        >
+                          {evaluatingProposalId === proposal.id
+                            ? 'Evaluating...'
+                            : proposal.status === 'countered'
+                              ? 'Accept counter-offer'
+                              : 'Accept proposal'}
+                        </button>
+                      </div>
+                    ) : null}
+                  </article>
+                );
+              })}
+            </div>
+          ) : null}
+        </section>
+      ) : null}
 
       <form className="terminal-form" onSubmit={onSubmit}>
         <label htmlFor="terminal-input" className="label">
