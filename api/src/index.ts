@@ -17,8 +17,14 @@ import { fetchByCid } from './services/ipfs';
 
 const app = express();
 
+const corsOptions = {
+  origin: '*',
+  methods: ['GET', 'POST', 'PATCH', 'DELETE', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization', 'x-agent-address'],
+};
 app.use(helmet());
-app.use(cors({ origin: '*', methods: ['GET', 'POST', 'PATCH', 'DELETE'] }));
+app.use(cors(corsOptions));
+app.options('*', cors(corsOptions)); // handle preflight for all routes
 app.use(express.json({ limit: '1mb' }));
 app.use(extractAgent);
 
