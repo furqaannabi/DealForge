@@ -155,7 +155,6 @@ router.post('/', requireAuth, asyncHandler(async (req, res) => {
   }
 
   // Caller must be the payer
-  console.log(`[mirror] onChain.payer=${onChain.payer} req.agentAddress=${req.agentAddress}`);
   if (onChain.payer !== req.agentAddress) {
     res.status(403).json({ error: 'Only the payer can mirror a deal' });
     return;
