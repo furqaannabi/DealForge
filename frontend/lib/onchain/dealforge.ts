@@ -54,6 +54,10 @@ function getInjectedProvider() {
   return (window as Window & { ethereum?: unknown }).ethereum ?? null;
 }
 
+function sleep(ms: number) {
+  return new Promise((resolve) => window.setTimeout(resolve, ms));
+}
+
 function cidToBytes32(cid: string) {
   const parsed = CID.parse(cid);
   if (parsed.multihash.code !== 0x12 || parsed.multihash.size !== 32) {
@@ -73,7 +77,6 @@ function extractCreatedDeal(receipt: { logs: Array<{ data: `0x${string}`; topics
         data: log.data,
         topics: [...log.topics] as [signature: `0x${string}`, ...args: `0x${string}`[]],
       });
-      console.log("deal log", decoded.args.payer)
       if (decoded.eventName === 'DealCreated') {
         return {
           dealId: Number(decoded.args.dealId),
@@ -158,16 +161,16 @@ export async function createDealForAcceptedProposal({
   const mirrorHeaderAddress = createdDeal.payer;
 
   try {
-    console.log("mirror Deal logs ",mirrorHeaderAddress,walletClient.account,createdDeal.payer)
+    await sleep(5000);
     await mirrorDeal(
       {
         deal_id: createdDeal.dealId,
         tx_hash: txHash,
         job_id: jobId,
-      task_cid: taskCid,
-    },
-    mirrorHeaderAddress,
-  );
+        task_cid: taskCid,
+      },
+      mirrorHeaderAddress,
+    );
   } catch (error) {
     const message = error instanceof Error ? error.message : 'Unknown mirror error';
     console.error('Deal mirror failed', {
