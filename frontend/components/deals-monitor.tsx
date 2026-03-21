@@ -121,8 +121,11 @@ async function mapApiDeal(deal: ApiDeal, jobsById: Map<string, ApiJob>): Promise
 }
 
 export function DealsMonitor() {
+  const pageSize = 6;
   const [items, setItems] = useState<DealMonitorItem[]>([]);
   const [source, setSource] = useState<'api' | 'empty' | 'error' | 'loading'>('loading');
+  const [page, setPage] = useState(0);
+  const [totalDeals, setTotalDeals] = useState(0);
   const [copiedWorkerId, setCopiedWorkerId] = useState<number | null>(null);
   const [selectedResult, setSelectedResult] = useState<{
     dealId: number;
@@ -175,12 +178,14 @@ export function DealsMonitor() {
     async function load() {
       try {
         const [dealsResponse, jobsResponse] = await Promise.all([
-          listDeals({ limit: 6 }),
+          listDeals({ limit: pageSize, offset: page * pageSize }),
           listJobs(),
         ]);
         if (!active) {
           return;
         }
+
+        setTotalDeals(dealsResponse.total);
 
         if (dealsResponse.deals.length === 0) {
           setItems([]);
@@ -213,13 +218,16 @@ export function DealsMonitor() {
     return () => {
       active = false;
     };
-  }, []);
+  }, [page]);
 
   const liveCount = items.filter((deal) => deal.status === 'EXECUTING' || deal.status === 'RESULT_SUBMITTED').length;
   const finalizedCount = items.filter((deal) => deal.status === 'SETTLED').length;
   const escrowTotal = items
     .reduce((total, deal) => total + (Number.parseFloat(deal.escrow) || 0), 0)
     .toFixed(4);
+  const totalPages = Math.max(1, Math.ceil(totalDeals / pageSize));
+  const showingFrom = totalDeals === 0 ? 0 : page * pageSize + 1;
+  const showingTo = totalDeals === 0 ? 0 : Math.min(totalDeals, (page + 1) * pageSize);
 
   return (
     <>
@@ -320,6 +328,30 @@ export function DealsMonitor() {
           </article>
         ))}
       </section>
+
+      {source === 'api' && totalDeals > 0 ? (
+        <section className="deal-pagination">
+          <span>
+            Showing {showingFrom}-{showingTo} of {totalDeals}
+          </span>
+          <div className="deal-pagination-actions">
+            <button type="button" className="button" onClick={() => setPage((current) => Math.max(0, current - 1))} disabled={page === 0}>
+              Previous
+            </button>
+            <span>
+              Page {page + 1} of {totalPages}
+            </span>
+            <button
+              type="button"
+              className="button"
+              onClick={() => setPage((current) => Math.min(totalPages - 1, current + 1))}
+              disabled={page >= totalPages - 1}
+            >
+              Next
+            </button>
+          </div>
+        </section>
+      ) : null}
 
       {selectedResult ? (
         <div className="modal-backdrop" onClick={() => setSelectedResult(null)}>
