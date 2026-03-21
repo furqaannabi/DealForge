@@ -1,15 +1,36 @@
 'use client';
 
 import { useEffect, useState } from 'react';
+import { createPublicClient, http } from 'viem';
+import { base, baseSepolia } from 'viem/chains';
 import { listDeals } from '@/lib/api/deals';
 import { listJobs } from '@/lib/api/jobs';
 import { fetchIpfsContent, fetchIpfsTaskTitle } from '@/lib/ipfs';
+import { DEALFORGE_CHAIN_ID, DEALFORGE_CONTRACT_ADDRESS } from '@/lib/config';
 import type { DealCardData } from '@/lib/mock-data';
 import type { ApiDeal, ApiJob } from '@/lib/types/api';
 
 type DealMonitorItem = DealCardData & {
+  payer: string;
   resultCid?: string | null;
+  validatorVotes?: {
+    accept: number;
+    reject: number;
+  } | null;
 };
+
+const DEALFORGE_VOTES_ABI = [
+  {
+    type: 'function',
+    name: 'getVoteCounts',
+    stateMutability: 'view',
+    inputs: [{ name: 'dealId', type: 'uint256' }],
+    outputs: [
+      { name: '', type: 'uint256' },
+      { name: '', type: 'uint256' },
+    ],
+  },
+] as const;
 
 const STATUS_DETAILS: Record<DealCardData['status'], { progress: number; confirmation: DealCardData['confirmation'] }> = {
   NEGOTIATING: { progress: 20, confirmation: 'Pending' },
@@ -49,6 +70,37 @@ function formatAmount(amount: string) {
     return `${formatted} ETH`;
   } catch {
     return amount;
+  }
+}
+
+function getActiveChain() {
+  return DEALFORGE_CHAIN_ID === base.id ? base : baseSepolia;
+}
+
+async function readVoteCounts(dealId: number) {
+  if (!DEALFORGE_CONTRACT_ADDRESS) {
+    return null;
+  }
+
+  try {
+    const publicClient = createPublicClient({
+      chain: getActiveChain(),
+      transport: http(),
+    });
+
+    const [accept, reject] = await publicClient.readContract({
+      address: DEALFORGE_CONTRACT_ADDRESS as `0x${string}`,
+      abi: DEALFORGE_VOTES_ABI,
+      functionName: 'getVoteCounts',
+      args: [BigInt(dealId)],
+    });
+
+    return {
+      accept: Number(accept),
+      reject: Number(reject),
+    };
+  } catch {
+    return null;
   }
 }
 
@@ -98,6 +150,7 @@ async function mapApiDeal(deal: ApiDeal, jobsById: Map<string, ApiJob>): Promise
 
   return {
     id,
+    payer: deal.payer,
     worker: deal.worker,
     task: await resolveDealTaskTitle(deal, jobsById),
     escrow: formatAmount(deal.amount),
@@ -105,6 +158,7 @@ async function mapApiDeal(deal: ApiDeal, jobsById: Map<string, ApiJob>): Promise
     deadline: displayDate,
     txHash,
     resultCid: deal.result_cid ?? deal.resultCid ?? null,
+    validatorVotes: await readVoteCounts(id),
     progress: statusDetails.progress,
     confirmation: statusDetails.confirmation,
     timeline: [
@@ -126,22 +180,23 @@ export function DealsMonitor() {
   const [source, setSource] = useState<'api' | 'empty' | 'error' | 'loading'>('loading');
   const [page, setPage] = useState(0);
   const [totalDeals, setTotalDeals] = useState(0);
-  const [copiedWorkerId, setCopiedWorkerId] = useState<number | null>(null);
+  const [copiedAddressKey, setCopiedAddressKey] = useState<string | null>(null);
   const [selectedResult, setSelectedResult] = useState<{
     dealId: number;
     cid: string;
     content: string;
     isJson: boolean;
   } | null>(null);
+  const [selectedDeal, setSelectedDeal] = useState<DealMonitorItem | null>(null);
   const [resultState, setResultState] = useState<'idle' | 'loading' | 'error'>('idle');
 
-  async function copyWorkerAddress(id: number, address: string) {
+  async function copyAddress(key: string, address: string) {
     try {
       await navigator.clipboard.writeText(address);
-      setCopiedWorkerId(id);
-      setTimeout(() => setCopiedWorkerId((current) => (current === id ? null : current)), 1200);
+      setCopiedAddressKey(key);
+      setTimeout(() => setCopiedAddressKey((current) => (current === key ? null : current)), 1200);
     } catch {
-      setCopiedWorkerId(null);
+      setCopiedAddressKey(null);
     }
   }
 
@@ -150,6 +205,7 @@ export function DealsMonitor() {
       return;
     }
 
+    setSelectedDeal(null);
     setResultState('loading');
     setSelectedResult({
       dealId: deal.id,
@@ -256,59 +312,77 @@ export function DealsMonitor() {
         )}
 
         {items.map((deal) => (
-          <article key={deal.id} className="panel deal-card-minimal">
+          <article
+            key={deal.id}
+            className="panel deal-card-minimal deal-card-clickable"
+            role="button"
+            tabIndex={0}
+            onClick={() => setSelectedDeal(deal)}
+            onKeyDown={(event) => {
+              if (event.key === 'Enter' || event.key === ' ') {
+                event.preventDefault();
+                setSelectedDeal(deal);
+              }
+            }}
+          >
             <div className="deal-row-top">
               <div>
                 <p className="eyebrow">Deal #{deal.id}</p>
-                <h2>
-                  <button
-                    type="button"
-                    onClick={() => void copyWorkerAddress(deal.id, deal.worker)}
-                    title="Click to copy full worker address"
-                    style={{ cursor: 'copy', background: 'none', border: 'none', padding: 0, color: 'inherit', font: 'inherit' }}
-                  >
-                    {copiedWorkerId === deal.id ? 'Copied' : formatShortAddress(deal.worker)}
-                  </button>
-                </h2>
+                <h2>{deal.task}</h2>
               </div>
               <span className={`pill pill-status ${deal.status.toLowerCase()}`}>{deal.status}</span>
             </div>
 
             <div className="deal-row-body">
-              <p className="deal-description">{deal.task}</p>
-
-              <div className="meta-grid">
-                <div className="meta-item">
+              <div className="deal-card-summary">
+                <div className="deal-summary-chip">
+                  <span>Payer</span>
+                  <strong>
+                    <button
+                      type="button"
+                      onClick={(event) => {
+                        event.stopPropagation();
+                        void copyAddress(`payer-${deal.id}`, deal.payer);
+                      }}
+                      title="Click to copy full payer address"
+                      style={{ cursor: 'copy', background: 'none', border: 'none', padding: 0, color: 'inherit', font: 'inherit' }}
+                    >
+                      {copiedAddressKey === `payer-${deal.id}` ? 'Copied' : formatShortAddress(deal.payer)}
+                    </button>
+                  </strong>
+                </div>
+                <div className="deal-summary-chip">
+                  <span>Worker</span>
+                  <strong>
+                    <button
+                      type="button"
+                      onClick={(event) => {
+                        event.stopPropagation();
+                        void copyAddress(`worker-${deal.id}`, deal.worker);
+                      }}
+                      title="Click to copy full worker address"
+                      style={{ cursor: 'copy', background: 'none', border: 'none', padding: 0, color: 'inherit', font: 'inherit' }}
+                    >
+                      {copiedAddressKey === `worker-${deal.id}` ? 'Copied' : formatShortAddress(deal.worker)}
+                    </button>
+                  </strong>
+                </div>
+                <div className="deal-summary-chip">
                   <span>Escrow</span>
                   <strong>{deal.escrow}</strong>
                 </div>
-                <div className="meta-item">
-                  <span>Deadline</span>
-                  <strong>{deal.deadline}</strong>
-                </div>
-                <div className="meta-item">
-                  <span>Confirmation</span>
-                  <strong>{deal.confirmation}</strong>
-                </div>
-                <div className="meta-item">
-                  <span>Transaction</span>
-                  <a href={`https://sepolia.basescan.org/tx/${deal.txHash}`} target="_blank" rel="noreferrer">
-                    {formatShortTxHash(deal.txHash)}
-                  </a>
+                <div className="deal-summary-chip">
+                  <span>Votes</span>
+                  <strong>
+                    {deal.validatorVotes
+                      ? `${deal.validatorVotes.accept}/${deal.validatorVotes.reject}`
+                      : 'Unavailable'}
+                  </strong>
                 </div>
               </div>
 
-              {deal.resultCid ? (
-                <div className="deal-actions">
-                  <button type="button" className="button" onClick={() => void openResultModal(deal)}>
-                    View result
-                  </button>
-                  <span className="mini-meta">CID {deal.resultCid.slice(0, 12)}...</span>
-                </div>
-              ) : null}
-
               <div className="progress-head">
-                <span>Progress</span>
+                <span>{deal.confirmation}</span>
                 <strong>{deal.progress}%</strong>
               </div>
 
@@ -316,13 +390,9 @@ export function DealsMonitor() {
                 <div className="progress-fill" style={{ width: `${deal.progress}%` }} />
               </div>
 
-              <div className="timeline-minimal">
-                {deal.timeline.map((step) => (
-                  <div key={`${deal.id}-${step.label}`} className={step.complete ? 'timeline-item complete' : 'timeline-item'}>
-                    <span className="timeline-bullet" />
-                    <span>{step.label}</span>
-                  </div>
-                ))}
+              <div className="deal-card-footer">
+                <span className="mini-meta">{deal.deadline}</span>
+                <span className="mini-meta">Open details</span>
               </div>
             </div>
           </article>
@@ -355,7 +425,7 @@ export function DealsMonitor() {
 
       {selectedResult ? (
         <div className="modal-backdrop" onClick={() => setSelectedResult(null)}>
-          <div className="modal-panel panel" onClick={(event) => event.stopPropagation()}>
+          <div className="modal-panel panel modal-panel-result" onClick={(event) => event.stopPropagation()}>
             <div className="delegation-head">
               <div>
                 <p className="eyebrow">Submitted work</p>
@@ -375,6 +445,88 @@ export function DealsMonitor() {
             ) : (
               <pre className="delegation-code result-code">{selectedResult.content}</pre>
             )}
+          </div>
+        </div>
+      ) : null}
+
+      {selectedDeal && !selectedResult ? (
+        <div className="modal-backdrop" onClick={() => setSelectedDeal(null)}>
+          <div className="modal-panel panel modal-panel-deal" onClick={(event) => event.stopPropagation()}>
+            <div className="delegation-head">
+              <div>
+                <p className="eyebrow">Deal #{selectedDeal.id}</p>
+                <h2>{selectedDeal.task}</h2>
+              </div>
+              <div className="deal-modal-header-actions">
+                {selectedDeal.resultCid ? (
+                  <button type="button" className="button" onClick={() => void openResultModal(selectedDeal)}>
+                    View submitted result
+                  </button>
+                ) : null}
+                <button type="button" className="button" onClick={() => setSelectedDeal(null)}>
+                  Close
+                </button>
+              </div>
+            </div>
+
+            <div className="meta-grid deal-detail-grid">
+              <div className="meta-item">
+                <span>Status</span>
+                <strong>{selectedDeal.status}</strong>
+              </div>
+              <div className="meta-item">
+                <span>Escrow</span>
+                <strong>{selectedDeal.escrow}</strong>
+              </div>
+              <div className="meta-item">
+                <span>Payer Agent</span>
+                <strong className="address-text">{selectedDeal.payer}</strong>
+              </div>
+              <div className="meta-item">
+                <span>Worker Agent</span>
+                <strong className="address-text">{selectedDeal.worker}</strong>
+              </div>
+              <div className="meta-item">
+                <span>Confirmation</span>
+                <strong>{selectedDeal.confirmation}</strong>
+              </div>
+              <div className="meta-item">
+                <span>Validator votes</span>
+                <strong>
+                  {selectedDeal.validatorVotes
+                    ? `${selectedDeal.validatorVotes.accept} accept / ${selectedDeal.validatorVotes.reject} reject`
+                    : 'Unavailable'}
+                </strong>
+              </div>
+              <div className="meta-item">
+                <span>Tracked at</span>
+                <strong>{selectedDeal.deadline}</strong>
+              </div>
+              <div className="meta-item">
+                <span>Transaction</span>
+                <a className="address-text" href={`https://sepolia.basescan.org/tx/${selectedDeal.txHash}`} target="_blank" rel="noreferrer">
+                  {selectedDeal.txHash}
+                </a>
+              </div>
+            </div>
+
+            <div className="progress-head">
+              <span>Progress</span>
+              <strong>{selectedDeal.progress}%</strong>
+            </div>
+
+            <div className="progress-track">
+              <div className="progress-fill" style={{ width: `${selectedDeal.progress}%` }} />
+            </div>
+
+            <div className="timeline-minimal">
+              {selectedDeal.timeline.map((step) => (
+                <div key={`${selectedDeal.id}-${step.label}`} className={step.complete ? 'timeline-item complete' : 'timeline-item'}>
+                  <span className="timeline-bullet" />
+                  <span>{step.label}</span>
+                </div>
+              ))}
+            </div>
           </div>
         </div>
       ) : null}

@@ -786,6 +786,11 @@ textarea {
   gap: 14px;
 }
 
+.modal-panel-deal,
+.modal-panel-result {
+  overflow: auto;
+}
+
 .result-code {
   max-height: min(56vh, 620px);
   white-space: pre-wrap;
@@ -858,11 +863,92 @@ textarea {
   padding: 18px 20px;
 }
 
+.deal-card-clickable {
+  cursor: pointer;
+  transition: transform 180ms ease, border-color 180ms ease, background 180ms ease;
+}
+
+.deal-card-clickable:hover {
+  transform: translateY(-2px);
+  border-color: var(--line-strong);
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.02), transparent 38%), var(--panel);
+}
+
+.deal-card-clickable:focus-visible {
+  outline: 1px solid var(--line-strong);
+  outline-offset: 2px;
+}
+
 .deal-actions {
   display: flex;
   align-items: center;
   gap: 10px;
   flex-wrap: wrap;
+}
+
+.deal-card-summary {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.deal-summary-chip {
+  padding: 12px;
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  background: var(--panel-soft);
+  display: grid;
+  gap: 6px;
+  justify-items: start;
+}
+
+.deal-summary-chip span {
+  color: var(--muted);
+  font-size: 0.74rem;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+}
+
+.deal-summary-chip strong,
+.meta-item strong,
+.meta-item a,
+.address-text {
+  min-width: 0;
+  text-align: left;
+  overflow-wrap: anywhere;
+  word-break: break-word;
+}
+
+.deal-summary-chip button {
+  display: block;
+  width: 100%;
+  text-align: left;
+}
+
+.deal-card-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.deal-detail-grid {
+  margin-top: 2px;
+}
+
+.deal-modal-actions,
+.deal-modal-header-actions {
+  display: flex;
+  justify-content: flex-start;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.deal-detail-grid .meta-item {
+  align-content: start;
+  justify-items: start;
 }
 
 .meta-grid {
@@ -916,7 +1002,7 @@ textarea {
 
 .timeline-item {
   display: flex;
-  align-items: center;
+  align-items: flex-start;
   gap: 10px;
 }
 
@@ -1022,6 +1108,10 @@ textarea {
   }
 
   .meta-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .deal-card-summary {
     grid-template-columns: 1fr;
   }
 }
