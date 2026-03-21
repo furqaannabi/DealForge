@@ -67,13 +67,13 @@ Deploys the verifier inside a Trusted Execution Environment (TEE) on EigenCloud 
 ### Prerequisites
 
 ```bash
-npm install -g @eigenlabs/ecloud-cli   # install CLI once
+docker login # login to docker hub (for push path)
+npm install -g @layr-labs/ecloud-cli   # install CLI once
 ecloud auth login                      # authenticate
 ecloud billing subscribe               # activate subscription (required)
-docker login                           # log in to Docker Hub (for push path)
 ```
 
-### Option A — Verifiable source build *(recommended for bounty)*
+### Verifiable source build
 
 Triggers a reproducible build from GitHub so EigenCloud can attest the binary.
 
@@ -101,28 +101,6 @@ Answer the prompts exactly as follows:
 | Dependency digests | *(leave blank)* |
 
 > ⚠️ **Common mistake:** Do NOT use `verifier\Dockerfile` (Windows backslash). The build runs on Linux. Use `verifier` as the context and `Dockerfile` as the path — no slashes needed.
-
-### Option B — Push existing image
-
-Build locally, push to Docker Hub, then point EigenCloud at the image.
-
-```bash
-# 1. Build and push
-cd verifier
-docker build -t furqaannabi/dealforge-verifier:latest .
-docker push furqaannabi/dealforge-verifier:latest
-
-# 2. Deploy
-ecloud compute app deploy
-```
-
-Answer the prompts:
-
-| Prompt | Value |
-|---|---|
-| Build from verifiable source? | **No** |
-| Choose deployment method | **Deploy existing image from registry** |
-| Docker image reference | `docker.io/furqaannabi/dealforge-verifier:latest` |
 
 ### After deployment
 
