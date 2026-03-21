@@ -5,6 +5,7 @@ import { ConnectKitButton } from 'connectkit';
 import { useAccount, useChainId, useWalletClient } from 'wagmi';
 import { DEALFORGE_CHAIN_ID, DEALFORGE_CHAIN_NAME } from '@/lib/config';
 import { registerAgent } from '@/lib/api/agents';
+import { listDeals } from '@/lib/api/deals';
 import { createJob, evaluateProposal, listJobProposals } from '@/lib/api/jobs';
 import { commandCatalog, initialTerminalLines, type TerminalLine } from '@/lib/mock-data';
 import { createDealForAcceptedProposal } from '@/lib/onchain/dealforge';
@@ -138,6 +139,7 @@ export function TerminalComposer() {
   const [walletError, setWalletError] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [activeJobId, setActiveJobId] = useState<string | null>(null);
+  const [activeDealId, setActiveDealId] = useState<number | null>(null);
   const [proposals, setProposals] = useState<ApiProposal[]>([]);
   const [proposalState, setProposalState] = useState<ProposalState>('idle');
   const [evaluatingProposalId, setEvaluatingProposalId] = useState<string | null>(null);
@@ -145,6 +147,8 @@ export function TerminalComposer() {
   const seenProposalIdsRef = useRef<Set<string>>(new Set());
   const proposalStatusesRef = useRef<Map<string, ApiProposal['status']>>(new Map());
   const creatingDealProposalIdsRef = useRef<Set<string>>(new Set());
+  const acceptanceWaitIdsRef = useRef<Set<string>>(new Set());
+  const dealStatusRef = useRef<string | null>(null);
 
   const suggestions = useMemo(() => {
     const seed = input.split('\n')[0].trim().toLowerCase();
@@ -244,8 +248,11 @@ export function TerminalComposer() {
   useEffect(() => {
     if (!activeJobId) {
       setProposals([]);
+      setActiveDealId(null);
       seenProposalIdsRef.current = new Set();
       proposalStatusesRef.current = new Map();
+      acceptanceWaitIdsRef.current = new Set();
+      dealStatusRef.current = null;
       setProposalState('idle');
       return;
     }
@@ -273,8 +280,8 @@ export function TerminalComposer() {
           const currentStatus = proposal.status;
           const previousStatus = nextStatuses.get(proposal.id);
           if (!nextSeen.has(proposal.id)) {
-      const workerAddress = proposal.worker_address ?? proposal.workerAddress ?? 'unknown-worker';
-      const workerLabel = proposal.worker?.ens_name ?? proposal.worker?.ensName ?? formatAddress(workerAddress);
+            const workerAddress = proposal.worker_address ?? proposal.workerAddress ?? 'unknown-worker';
+            const workerLabel = proposal.worker?.ens_name ?? proposal.worker?.ensName ?? formatAddress(workerAddress);
             const price = proposal.proposed_price ?? proposal.proposedPrice ?? '0';
             appendLine('agent', `${workerLabel} submitted proposal ${proposal.id} for ${formatWeiAsEth(price)}.`);
             appendLine('agent', `Review proposal ${proposal.id} below and accept it to continue negotiation.`);
@@ -283,9 +290,11 @@ export function TerminalComposer() {
             if (currentStatus === 'countered') {
               appendLine('agent', `Proposal ${proposal.id} was countered. You can still accept the counter-offer below.`);
             } else if (currentStatus === 'accepted') {
+              acceptanceWaitIdsRef.current.delete(proposal.id);
               appendLine('success', `Proposal ${proposal.id} is now accepted.`);
               appendLine('agent', `Use the Create deal button below proposal ${proposal.id} to call createDeal() on-chain.`);
             } else if (currentStatus === 'rejected') {
+              acceptanceWaitIdsRef.current.delete(proposal.id);
               appendLine('agent', `Proposal ${proposal.id} was rejected.`);
             }
           }
@@ -311,6 +320,62 @@ export function TerminalComposer() {
     };
   }, [activeJobId]);
 
+  useEffect(() => {
+    if (!activeJobId) {
+      return;
+    }
+
+    let active = true;
+
+    async function loadDealStatus() {
+      try {
+        const response = await listDeals({ limit: 20 });
+        if (!active) {
+          return;
+        }
+
+        const linkedDeal = response.deals.find((deal) => (deal.job_id ?? deal.jobId) === activeJobId);
+        if (!linkedDeal) {
+          return;
+        }
+
+        const dealId = Number(linkedDeal.deal_id ?? linkedDeal.dealId);
+        if (Number.isFinite(dealId) && activeDealId !== dealId) {
+          setActiveDealId(dealId);
+        }
+
+        const currentStatus = linkedDeal.status;
+        const previousStatus = dealStatusRef.current;
+        if (previousStatus !== currentStatus) {
+          if (currentStatus === 'ACTIVE') {
+            appendLine('agent', `Deal #${dealId} is active. Waiting for the worker to submit the result.`);
+          } else if (currentStatus === 'SUBMITTED') {
+            appendLine('success', `Worker submitted the result for deal #${dealId}. Verification is next.`);
+          } else if (currentStatus === 'SETTLED') {
+            appendLine('success', `Deal #${dealId} settled successfully.`);
+          } else if (currentStatus === 'DISPUTED') {
+            appendLine('agent', `Deal #${dealId} entered dispute state.`);
+          } else if (currentStatus === 'REFUNDED') {
+            appendLine('agent', `Deal #${dealId} was refunded.`);
+          }
+          dealStatusRef.current = currentStatus;
+        }
+      } catch {
+        // Keep polling quietly.
+      }
+    }
+
+    void loadDealStatus();
+    const interval = window.setInterval(() => {
+      void loadDealStatus();
+    }, 5000);
+
+    return () => {
+      active = false;
+      window.clearInterval(interval);
+    };
+  }, [activeDealId, activeJobId]);
+
   const onAcceptProposal = async (proposal: ApiProposal) => {
     if (!activeJobId || evaluatingProposalId) {
       return;
@@ -318,6 +383,8 @@ export function TerminalComposer() {
 
     setEvaluatingProposalId(proposal.id);
     appendLine('agent', `Evaluating proposal ${proposal.id}...`);
+    appendLine('agent', 'This can take a while. Waiting for the proposal status to update...');
+    acceptanceWaitIdsRef.current.add(proposal.id);
 
     try {
       if (!address) {
@@ -332,16 +399,18 @@ export function TerminalComposer() {
       setProposals(response.proposals);
 
       if (evaluation.decision === 'accept') {
-        appendLine('success', `Proposal ${proposal.id} accepted.`);
-        appendLine('agent', `Create the on-chain deal from the accepted proposal card below.`);
+        appendLine('agent', `Acceptance requested for proposal ${proposal.id}. The UI will update when the backend marks it accepted.`);
       } else if (evaluation.decision === 'counter') {
+        acceptanceWaitIdsRef.current.delete(proposal.id);
         appendLine('agent', `Proposal ${proposal.id} was countered. Review the updated negotiation state.`);
       } else {
+        acceptanceWaitIdsRef.current.delete(proposal.id);
         appendLine('agent', `Proposal ${proposal.id} was rejected.`);
       }
     } catch (error) {
       const message = error instanceof Error ? error.message : 'Unknown error';
-      appendLine('agent', `Proposal evaluation failed: ${message}`);
+      appendLine('agent', `Proposal evaluation request returned an error: ${message}`);
+      appendLine('agent', `Continuing to watch proposal ${proposal.id} for a delayed acceptance update.`);
     } finally {
       setEvaluatingProposalId(null);
     }
@@ -425,8 +494,11 @@ export function TerminalComposer() {
       );
       const resolvedJobId = createdJob.id ?? 'pending-id';
       setActiveJobId(createdJob.id ?? null);
+      setActiveDealId(null);
       seenProposalIdsRef.current = new Set();
       proposalStatusesRef.current = new Map();
+      acceptanceWaitIdsRef.current = new Set();
+      dealStatusRef.current = null;
       setAttachments([]);
 
       enqueueLines([
