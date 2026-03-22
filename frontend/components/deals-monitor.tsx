@@ -1,36 +1,16 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { createPublicClient, http } from 'viem';
-import { base, baseSepolia } from 'viem/chains';
 import { listDeals } from '@/lib/api/deals';
 import { listJobs } from '@/lib/api/jobs';
 import { fetchIpfsContent, fetchIpfsTaskTitle } from '@/lib/ipfs';
-import { DEALFORGE_CHAIN_ID, DEALFORGE_CONTRACT_ADDRESS } from '@/lib/config';
 import type { DealCardData } from '@/lib/mock-data';
 import type { ApiDeal, ApiJob } from '@/lib/types/api';
 
 type DealMonitorItem = DealCardData & {
   payer: string;
   resultCid?: string | null;
-  validatorVotes?: {
-    accept: number;
-    reject: number;
-  } | null;
 };
-
-const DEALFORGE_VOTES_ABI = [
-  {
-    type: 'function',
-    name: 'getVoteCounts',
-    stateMutability: 'view',
-    inputs: [{ name: 'dealId', type: 'uint256' }],
-    outputs: [
-      { name: '', type: 'uint256' },
-      { name: '', type: 'uint256' },
-    ],
-  },
-] as const;
 
 const STATUS_DETAILS: Record<DealCardData['status'], { progress: number; confirmation: DealCardData['confirmation'] }> = {
   NEGOTIATING: { progress: 20, confirmation: 'Pending' },
@@ -70,37 +50,6 @@ function formatAmount(amount: string) {
     return `${formatted} ETH`;
   } catch {
     return amount;
-  }
-}
-
-function getActiveChain() {
-  return DEALFORGE_CHAIN_ID === base.id ? base : baseSepolia;
-}
-
-async function readVoteCounts(dealId: number) {
-  if (!DEALFORGE_CONTRACT_ADDRESS) {
-    return null;
-  }
-
-  try {
-    const publicClient = createPublicClient({
-      chain: getActiveChain(),
-      transport: http(),
-    });
-
-    const [accept, reject] = await publicClient.readContract({
-      address: DEALFORGE_CONTRACT_ADDRESS as `0x${string}`,
-      abi: DEALFORGE_VOTES_ABI,
-      functionName: 'getVoteCounts',
-      args: [BigInt(dealId)],
-    });
-
-    return {
-      accept: Number(accept),
-      reject: Number(reject),
-    };
-  } catch {
-    return null;
   }
 }
 
@@ -158,7 +107,6 @@ async function mapApiDeal(deal: ApiDeal, jobsById: Map<string, ApiJob>): Promise
     deadline: displayDate,
     txHash,
     resultCid: deal.result_cid ?? deal.resultCid ?? null,
-    validatorVotes: await readVoteCounts(id),
     progress: statusDetails.progress,
     confirmation: statusDetails.confirmation,
     timeline: [
@@ -372,12 +320,8 @@ export function DealsMonitor() {
                   <strong>{deal.escrow}</strong>
                 </div>
                 <div className="deal-summary-chip">
-                  <span>Votes</span>
-                  <strong>
-                    {deal.validatorVotes
-                      ? `${deal.validatorVotes.accept}/${deal.validatorVotes.reject}`
-                      : 'Unavailable'}
-                  </strong>
+                  <span>Confirmation</span>
+                  <strong>{deal.confirmation}</strong>
                 </div>
               </div>
 
@@ -489,14 +433,6 @@ export function DealsMonitor() {
               <div className="meta-item">
                 <span>Confirmation</span>
                 <strong>{selectedDeal.confirmation}</strong>
-              </div>
-              <div className="meta-item">
-                <span>Validator votes</span>
-                <strong>
-                  {selectedDeal.validatorVotes
-                    ? `${selectedDeal.validatorVotes.accept} accept / ${selectedDeal.validatorVotes.reject} reject`
-                    : 'Unavailable'}
-                </strong>
               </div>
               <div className="meta-item">
                 <span>Tracked at</span>
