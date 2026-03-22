@@ -1,5 +1,6 @@
 import { DashboardOverview } from '@/components/dashboard-overview';
 import { DashboardActivity } from '@/components/dashboard-activity';
+import { AgentSkillCard } from '@/components/agent-skill-card';
 
 export default function Home() {
   return (
@@ -32,6 +33,8 @@ export default function Home() {
       <DashboardOverview />
 
       <DashboardActivity />
+
+      <AgentSkillCard />
     </div>
   );
 }

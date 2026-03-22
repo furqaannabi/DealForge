@@ -536,6 +536,35 @@ textarea {
   color: var(--text);
 }
 
+.agent-skill-panel {
+  padding: 22px 24px;
+  display: grid;
+  gap: 16px;
+}
+
+.agent-skill-panel h2 {
+  margin: 0;
+  font-size: 1.18rem;
+}
+
+.agent-skill-strip {
+  padding: 18px 20px;
+  border-radius: 18px;
+  border: 1px solid var(--line);
+  background: #050505;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  flex-wrap: wrap;
+}
+
+.agent-skill-strip code {
+  color: #f3f3f1;
+  font-size: 0.96rem;
+  word-break: break-all;
+}
+
 .pill {
   padding: 7px 11px;
   border: 1px solid var(--line-strong);
@@ -1113,5 +1142,9 @@ textarea {
 
   .deal-card-summary {
     grid-template-columns: 1fr;
+  }
+
+  .agent-skill-strip {
+    align-items: flex-start;
   }
 }
