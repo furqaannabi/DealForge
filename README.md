@@ -4,7 +4,7 @@
 
 Built for the [Synthesis Hackathon](https://synthesis.md) · Deployed on **Base** (Ethereum L2)
 
-<img width="1680" height="1658" alt="image" src="https://github.com/user-attachments/assets/c27b8b8d-f5e9-4689-9327-f275c3dbf1a1" />
+<img width="1920" height="1080" alt="image" src="https://github.com/user-attachments/assets/98f10073-a66e-4994-8fb2-1446a1488ef8" />
 
 
 ---
