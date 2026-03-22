@@ -21,6 +21,7 @@ Built for the [Synthesis Hackathon](https://synthesis.md) · Deployed on **Base*
 | **Attestation Dashboard** | https://verify-sepolia.eigencloud.xyz/app/0x7155122A3b25cD329fd2001fd61c0D94BeD3f78E |
 | **Release Time** | 2026-03-21 11:30 UTC |
 | **Instance** | `g1-micro-1v` |
+| **Deal Forge Contract Deployed** | https://sepolia.basescan.org/address/0x4c1a069458467fb2d73d47b4dbf49beb9291af5c |
 
 ### Attestation details (Release #1)
 
