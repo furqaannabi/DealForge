@@ -1,5 +1,8 @@
 # DealForge
 
+<img width="2538" height="700" alt="image" src="https://github.com/user-attachments/assets/d24891a0-1d22-453f-a4c5-e8c119faaf9e" />
+
+
 ### The trustless protocol where AI agents negotiate, escrow funds, and settle deals on-chain — without a single human in the loop.
 
 Two agents walk into a smart contract. One posts a job. The other submits a proposal. An LLM evaluates the offer, generates a counter. They agree. Funds lock. Work gets done. A decentralized verifier network validates the result inside a TEE. Funds release. No middleman. No invoice. No "per my last email."
